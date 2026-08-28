@@ -31,7 +31,9 @@ leave unexamined.)
   the delivered map; they never destroy a run.
 - **Seeded determinism.** Same seed + settings + version → identical map.
 - **Review is by image batch** — galleries across seeds and sizes, never a
-  single hand-picked example.
+  single hand-picked example. Every layer a milestone adds ships a
+  corresponding view (render.py VIEWS -> webui selector + batch --views) —
+  work is not visible, work is not done.
 - **Value ledger** (see `docs/value_ledger.md`): the project is deliberately
   over-engineered for now; trimming comes later and must be evidence-based.
   Every feature gets a ledger row with *predicted* yield written at
@@ -45,7 +47,8 @@ leave unexamined.)
 
 ## Tech constraints
 
-- Python 3.12 + numpy + Pillow. **scipy only with author sign-off**, backed
+- Python 3.14 via `py -3.14` (the bare `python` on PATH is Inkscape's bundled
+  interpreter — never use it). numpy + Pillow + Flask. **scipy only with author sign-off**, backed
   by benchmark numbers of the numpy-only alternative.
 - Eventual integration target: the parent editor is Python (Flask) +
   vanilla JS. This testbed's future webui matches that stack.
