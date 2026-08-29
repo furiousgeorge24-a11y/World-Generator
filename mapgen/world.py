@@ -12,6 +12,7 @@ class World:
         self.controls = dict(controls)
         self.version = VERSION
         self.layers: dict[str, np.ndarray] = {}
+        self.meta: dict[str, object] = {}  # per-stage scalars (poles, thresholds)
         self.timings: dict[str, float] = {}
         self.findings: list[dict] = []
         self._coords: tuple[np.ndarray, np.ndarray] | None = None

@@ -3,4 +3,4 @@
 See docs/contract.md for the promises this package keeps.
 """
 
-VERSION = "0.1.0"
+VERSION = "0.7.1"

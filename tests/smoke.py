@@ -42,9 +42,9 @@ check("stage keying: streams differ across stages", not np.array_equal(a, b))
 check("stage keying: stream stable for same stage", np.array_equal(a, a2))
 
 # 4. never-fail resolve: clamp + unknown -> findings, not exceptions
-vals, finds = registry.resolve({"stub_relief_amp_m": 99999, "nope": 3})
+vals, finds = registry.resolve({"plate_count": 999, "nope": 3})
 check("out-of-range clamps with finding",
-      vals["stub_relief_amp_m"] == 8000.0
+      vals["plate_count"] == 24
       and any("clamped" in f["msg"] for f in finds))
 check("unknown control ignored with finding",
       any("unknown" in f["msg"] for f in finds))
@@ -57,8 +57,90 @@ hi_ds = hi.reshape(128, 2, 128, 2).mean(axis=(1, 3))
 r = np.corrcoef(lo.ravel(), hi_ds.ravel())[0, 1]
 check(f"same extent across resolutions correlates (r={r:.3f})", r > 0.9)
 
-# 6. border finding present (contract section 7 regression hook)
-check("border_ring finding reported",
-      any(f["check"] == "border_ring" for f in w1.findings))
+# 6. border invariant HOLDS (contract section 7) — green from C1 onward
+bf = next(f for f in w1.findings if f["check"] == "border_ring")
+check("border invariant holds (outer ring water)", bf["ok"])
+
+# 7. plates/crust sanity
+check("plate_id covers multiple plates",
+      len(np.unique(w1["plate_id"])) >= 3)
+lf = float((w1["elevation"] >= 0).mean())
+check(f"land fraction near target (got {lf:.3f})", 0.15 < lf < 0.6)
+
+# 8. crust-plate affinity (A1): at full affinity every non-fallback core
+# sits on a continent-flagged plate, and the border invariant still holds
+wa = pipeline.generate(11, {"crust_plate_affinity": 1.0}, 192)
+am = wa.meta["crust"]["affinity"]
+anchored = all(p in am["cont_plates"]
+               for p, fb in zip(am["cluster_plates"], am["cluster_fallback"])
+               if not fb)
+check("affinity=1 anchors cores to continental plates", anchored)
+check("border invariant holds at affinity=1",
+      next(f for f in wa.findings if f["check"] == "border_ring")["ok"])
+
+# 9. KR palettes: every palette renders; canon differs from classic
+imgs = []
+for p in range(4):
+    w1.controls["render_palette"] = p
+    imgs.append(render.hypsometric(w1).tobytes())
+w1.controls["render_palette"] = 1
+check("all render palettes produce output", all(len(b) > 0 for b in imgs))
+check("canon palette differs from classic", imgs[0] != imgs[1])
+
+# 10. K1 drowned datum: border holds at flood extremes; shelf is carved;
+# planation never moves today's coastline
+wf = pipeline.generate(13, {"flood_rise_m": 250.0}, 192)
+check("border invariant holds at flood=250",
+      next(f for f in wf.findings if f["check"] == "border_ring")["ok"])
+w0 = pipeline.generate(13, {"flood_rise_m": 0.0}, 192)
+check("border invariant holds at flood=0",
+      next(f for f in w0.findings if f["check"] == "border_ring")["ok"])
+ef = next(f for f in w1.findings if f["check"] == "erosion")
+check(f"shelf carved while exposed (got {ef['shelf_incision_km3']} km3)",
+      ef["shelf_incision_km3"] > 0.0)
+wp0 = pipeline.generate(13, {"wave_planation": 0.0}, 192)
+wp1 = pipeline.generate(13, {"wave_planation": 1.0}, 192)
+check("planation never moves today's coastline",
+      np.array_equal(wp0["elevation"] >= 0, wp1["elevation"] >= 0))
+
+# 11. K3 mass balance: deposition is real but conservative; the diffusion
+# coastal leak is fixed; plains grain adds lowland texture
+ek = next(f for f in w1.findings if f["check"] == "erosion")
+check(f"deposition settles carved mass (got {ek['deposited_km3']} km3)",
+      0.0 < ek["deposited_km3"] < ek["eroded_volume_km3"])
+lf0 = float((pipeline.generate(17, {"hillslope_smoothing": 0.0},
+                               192)["elevation"] >= 0).mean())
+lf1 = float((pipeline.generate(17, {"hillslope_smoothing": 1.0},
+                               192)["elevation"] >= 0).mean())
+check(f"diffusion no longer eats coasts (delta {abs(lf1 - lf0):.4f})",
+      abs(lf1 - lf0) < 0.008)
+def _lowland_texture(e):
+    """Mean high-pass magnitude strictly inside land below 300 m (whole
+    neighborhood in-band, so coast and mountain edges don't dominate)."""
+    nb = (e[:-2, 1:-1] + e[2:, 1:-1] + e[1:-1, :-2] + e[1:-1, 2:]) / 4.0
+    hp = e[1:-1, 1:-1] - nb
+    band = (e >= 0) & (e < 300)
+    m = (band[1:-1, 1:-1] & band[:-2, 1:-1] & band[2:, 1:-1]
+         & band[1:-1, :-2] & band[1:-1, 2:])
+    return float(np.abs(hp[m]).mean())
+
+
+g0 = pipeline.generate(17, {"plains_grain": 0.0}, 192)["elevation"].astype(float)
+g1 = pipeline.generate(17, {"plains_grain": 1.0}, 192)["elevation"].astype(float)
+low0, low1 = _lowland_texture(g0), _lowland_texture(g1)
+check(f"plains grain textures lowlands ({low0:.2f} -> {low1:.2f} m/cell)",
+      low1 > low0 + 0.4)
+
+# 12. K2 profiles: plateau tendency actually gates plateau formation, and
+# the isostatic knee keeps stacked orogens bounded
+wp0 = pipeline.generate(3, {"plateau_tendency": 0.0}, 256)
+wp1 = pipeline.generate(3, {"plateau_tendency": 1.0}, 256)
+s0 = float(wp0["tect_plateau"].sum())
+s1 = float(wp1["tect_plateau"].sum())
+check(f"plateau_tendency gates plateau mass ({s0:.0f} -> {s1:.0f})",
+      s1 > max(s0 * 1.5, 1.0))
+emax = max(float(wp0["elevation"].max()), float(wp1["elevation"].max()),
+           float(w1["elevation"].max()))
+check(f"isostatic knee bounds peaks (max {emax:.0f} m)", emax < 8500.0)
 
 print("all smoke tests pass")

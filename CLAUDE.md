@@ -30,6 +30,14 @@ leave unexamined.)
 - **User-facing generation never fails.** Findings ship as a report beside
   the delivered map; they never destroy a run.
 - **Seeded determinism.** Same seed + settings + version → identical map.
+- **Features are steady-state footprints of named natural processes**
+  (author-blessed 2026-08-28). Every feature derives from causal fields the
+  pipeline computes (kinematics, crust age, hydrology) — never placed for
+  its appearance; paint the cause, let the render reveal the consequence.
+  Time-stepped simulation stays rejected. Sub-grid texture noise is
+  process-modulated parameterization, never uniform decal jitter. Control
+  promises are worded in process terms (rates, physical magnitudes). See
+  design.md "The process-footprint principle".
 - **Review is by image batch** — galleries across seeds and sizes, never a
   single hand-picked example. Every layer a milestone adds ships a
   corresponding view (render.py VIEWS -> webui selector + batch --views) —

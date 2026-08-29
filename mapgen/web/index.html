@@ -13,10 +13,14 @@
            background: #1e2026; border-right: 1px solid #2c2e36; }
   #view { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   #stage { flex: 1; position: relative; overflow: hidden; cursor: grab;
-           background: #101116; }
+           background: #101116; user-select: none; touch-action: none;
+           overscroll-behavior: contain; }
   #stage.dragging { cursor: grabbing; }
   #map { position: absolute; left: 0; top: 0; transform-origin: 0 0;
          image-rendering: pixelated; user-select: none; -webkit-user-drag: none; }
+  /* promote to its own layer only while dragging: panning a 512px PNG at 80x
+     is a compositor move instead of a repaint, but the layer isn't held. */
+  #stage.dragging #map { will-change: transform; }
   #zoomlbl { position: absolute; right: 10px; top: 8px; color: #8a8d99;
              background: #17181cd0; padding: 2px 8px; border-radius: 4px;
              font-size: 11px; pointer-events: none; }
@@ -125,7 +129,7 @@ function makeControl(c) {
 const stage = $("stage"), map = $("map");
 let scale = 1, tx = 0, ty = 0, fitScale = 1;
 function applyT() {
-  map.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  map.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`;
   $("zoomlbl").textContent = Math.round(scale * 100) + "%";
 }
 function fit() {
@@ -149,33 +153,80 @@ stage.addEventListener("wheel", e => {
   scale = ns;
   applyT();
 }, { passive: false });
-let drag = null;
-stage.addEventListener("mousedown", e => {
-  drag = { x: e.clientX, y: e.clientY }; stage.classList.add("dragging");
+/* Pan: press primary button, move, release. Pointer Events + pointer capture
+   so the drag survives leaving the stage or the window entirely (a mouseup
+   over another app is still delivered here), and so pen/touch pan for free.
+   Transform writes are coalesced to one per frame. */
+let panId = null, panX = 0, panY = 0, panRaf = 0;
+
+function panFlush() { panRaf = 0; applyT(); }
+
+function endPan(e) {
+  if (panId === null || (e && e.pointerId !== panId)) return;
+  if (stage.hasPointerCapture(panId)) stage.releasePointerCapture(panId);
+  panId = null;
+  stage.classList.remove("dragging");
+  if (panRaf) { cancelAnimationFrame(panRaf); panFlush(); }
+}
+
+stage.addEventListener("pointerdown", e => {
+  // primary button of the primary pointer only: right/middle drags and extra
+  // touch points must not hijack (or silently stick) the pan.
+  if (panId !== null || !e.isPrimary || e.button !== 0) return;
+  panId = e.pointerId;
+  panX = e.clientX; panY = e.clientY;
+  stage.setPointerCapture(panId);
+  stage.classList.add("dragging");
 });
-window.addEventListener("mousemove", e => {
-  if (!drag) return;
-  tx += e.clientX - drag.x; ty += e.clientY - drag.y;
-  drag = { x: e.clientX, y: e.clientY };
-  applyT();
+
+stage.addEventListener("pointermove", e => {
+  if (e.pointerId !== panId) return;
+  if (!(e.buttons & 1)) { endPan(e); return; }  // button released unseen
+  tx += e.clientX - panX; ty += e.clientY - panY;
+  panX = e.clientX; panY = e.clientY;
+  if (!panRaf) panRaf = requestAnimationFrame(panFlush);
 });
-window.addEventListener("mouseup", () => { drag = null; stage.classList.remove("dragging"); });
+
+stage.addEventListener("pointerup", endPan);
+stage.addEventListener("pointercancel", endPan);
+stage.addEventListener("lostpointercapture", endPan);
+// Firefox ignores -webkit-user-drag; without this the image's native
+// drag-and-drop starts and swallows the rest of the gesture.
+map.addEventListener("dragstart", e => e.preventDefault());
 stage.addEventListener("dblclick", fit);
 window.addEventListener("resize", fit);
 
 /* ---- history rail --------------------------------------------------- */
+/* Each entry holds every view of one generation. The rail always shows the
+   hypsometric view; the selector picks which view of the selected entry the
+   main viewer draws. Selecting an entry never touches the selector. */
 const HIST_MAX = 16;
 const hist = [];
-function showEntry(entry, keepView) {
+let current = null;
+
+function paint(entry, keepView) {
+  if (!entry) return;
+  const want = $("vsel").value;
+  const src = entry.images[want] || entry.images[entry.view] ||
+              Object.values(entry.images)[0];
+  if (!src) return;
   if (keepView) map.dataset.keepview = "1";
-  map.src = entry.image;
+  map.src = src;
+}
+function showEntry(entry, keepView) {
+  current = entry;
+  paint(entry, keepView);
   $("report").textContent = JSON.stringify(entry.report, null, 2);
   for (const h of hist) h.el.classList.toggle("sel", h === entry);
 }
 function addHist(data, label) {
+  const entry = { images: data.images, view: data.view,
+                  report: data.report, el: null };
   const el = document.createElement("img");
-  el.className = "thumb"; el.src = data.image; el.title = label;
-  const entry = { image: data.image, report: data.report, el };
+  el.className = "thumb";
+  el.src = entry.images.hypsometric || entry.images[data.view];
+  el.title = label;
+  entry.el = el;
   el.addEventListener("click", () => showEntry(entry, true));
   hist.unshift(entry);
   $("hist").prepend(el);
@@ -209,7 +260,7 @@ async function go() {
       }
       vsel.value = data.views.includes(cur) ? cur : data.views[0];
     }
-    addHist(data, `s${seed} ${size}² ${data.view}`);
+    addHist(data, `s${seed} ${size}²`);
     const warns = data.report.findings.filter(f => f.level === "warn");
     $("status").innerHTML = data.elapsed_s + "s" + (data.cached ? " (cached sim)" : "")
       + (warns.length ? " <span class='warn'>&#9888; " + warns.length + " finding(s)</span>" : "");
@@ -234,7 +285,7 @@ async function init() {
   });
   $("seed").addEventListener("change", go);
   $("size").addEventListener("change", go);
-  $("vsel").addEventListener("change", go);
+  $("vsel").addEventListener("change", () => paint(current, true));
   go();
 }
 init();
