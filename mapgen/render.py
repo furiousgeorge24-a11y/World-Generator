@@ -263,6 +263,20 @@ def view_plates(world: World) -> Image.Image:
             draw.line([cx, cy, ex, ey], fill=(255, 255, 255), width=1)
             draw.ellipse([ex - 2, ey - 2, ex + 2, ey + 2],
                          fill=(255, 255, 255))
+
+    # A2 audit: leading-edge shifts (orange: center travel + hit ring)
+    cell = world.cell_km
+    lead = world.meta.get("crust", {}).get("leading", {})
+    for li in lead.get("clusters", []):
+        if not li.get("applied"):
+            continue
+        fx, fy = (v / cell for v in li["from_km"])
+        tx, ty = (v / cell for v in li["center_km"])
+        hx, hy = (v / cell for v in li["hit_km"])
+        draw.line([fx, fy, tx, ty], fill=(255, 140, 0), width=2)
+        draw.ellipse([tx - 3, ty - 3, tx + 3, ty + 3], fill=(255, 140, 0))
+        draw.ellipse([hx - 4, hy - 4, hx + 4, hy + 4],
+                     outline=(255, 140, 0), width=2)
     return img
 
 

@@ -125,10 +125,44 @@ bump, galleries, ledger rows, commit recommendation.*
   default from the sweep. Perf: 1024² ≈ 24.2 s (+0.5 s).
 - **Combined formal image review** closes the series — replaces the
   separately pending M1/M2 reviews (author-approved fold). **Pack built
-  at 0.7.0, rebuilt at 0.7.1 after the tier-1 retune: out/k_review/** —
+  at 0.7.0, rebuilt at 0.7.1 (tier-1 retune) and again at 0.9.2
+  (A2 + B1 landed, author default picks + trim verdicts in, new-knob
+  ablation tiles folded in): out/k_review/** —
   README.md inside maps every sheet to the ledger verdicts, default
   picks, and open questions it settles. Awaiting the author's sitting;
   ledger observed-yield columns fill there.
+- **A2 — leading-edge crust bias** — **code done (0.8.0)**,
+  author-authorized 2026-08-28: `active_margin_bias` (crust, primary,
+  provisional default 0.5) shifts continent clusters toward their
+  plate's convergent leading edge — coastal cordilleras with offshore
+  trenches emerge from the existing oc-ct couplet; nothing downstream
+  changed. Analytic march (resolution-independent), convergence-gated,
+  frame-clamped (border-defect constraint honored). bias=0 bit-identical
+  to 0.7.1 (hash-verified); 29 smoke checks green (5 new). Galleries:
+  out/a2_leading/ (_audit, _sweep, _seeds, _coasts). Author pick:
+  default **0.65** (2026-08-28, 0.9.2).
+- **B1 — passive-margin bathymetry** — **code done (0.9.0)**,
+  author-authorized 2026-08-28 (scope Q&A: edifice anatomy in;
+  `margin_width_km` in physical km; provisional A2 bias 0.5):
+  stretched-margin taper (gradual slope-rise descent, trench plunge
+  preserved), exported-sediment rise (K3's export bookkeeping becomes
+  a mass-fed apron field), edifice pedestals (arc + hotspot islands
+  stand on shoaled floor). B1-off bit-identical to 0.8.0
+  (hash-verified); 33 smoke checks green (4 new). Galleries:
+  out/b1_margins/ (_audit, _sweep, _seeds, _abl incl. shelf_width
+  redundancy tile, _coasts zooms). Author pick: `margin_width_km`
+  **350** (2026-08-28, 0.9.2); shelf_width judged complementary from
+  its ablation tile — no trim.
+- **Trim-suspect review** — **done (2026-08-28, 0.9.1)**: the ledger's
+  pre-registered marginals judged from focused ON/OFF/delta sheets
+  (out/trim_review/, 1024²/4 km). Author verdicts: ridge segmentation
+  + fracture scars, failed rifts, seafloor fabric (provisional, on/off
+  runs planned), and axial valley — keep; `backarc_basins` default →
+  0 (0.9.1, knob retained); `outer_rise` seaward bulge invisible —
+  nominated bulge-only trim, knob stays (carries K2's foreland).
+  Shrinks the k_review sitting's remaining scope to: era ruling,
+  plateau_tendency/lowland_dissection defaults, tier-1 confirmations,
+  watch items, scale ladder.
 - **Tier-1 default retune** — **done (0.7.1)**: the k_review-vs-examples
   canon comparison (2026-08-28) produced a ranked gap list; the author
   authorized tier 1 (default tweaks). Picks from out/tier1_defaults/

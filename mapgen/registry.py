@@ -53,6 +53,13 @@ REGISTRY: list[Control] = [
             "Approximate fraction of the map that is continental platform. "
             "The report states the achieved value; a finding fires beyond "
             "±0.08."),
+    Control("active_margin_bias", "float", 0.65, 0.0, 1.0, "crust", FULL,
+            "primary",
+            "Fraction of continents that crowd their plate's convergent "
+            "leading edge - the steady state of drift against a trench. "
+            "Produces Andean coastal cordilleras with the trench offshore. "
+            "0 = continents sit plate-interior (all margins passive); "
+            "1 = every continent that can jam against a trench does."),
     Control("continent_irregularity", "float", 0.5, 0.0, 1.0, "crust", FULL,
             "primary",
             "Shape complexity of landmasses: 0 smooth cores to 1 ragged, "
@@ -104,6 +111,12 @@ REGISTRY: list[Control] = [
     Control("shelf_width", "float", 0.5, 0.0, 1.0, "relief", FULL, "primary",
             "Breadth of passive-margin continental shelves. Active "
             "(trench-adjacent) margins stay narrow at every value."),
+    Control("margin_width_km", "float", 350.0, 0.0, 500.0, "relief", FULL,
+            "primary",
+            "Breadth of the stretched-crust taper on passive margins: the "
+            "gradual shelf-slope-rise descent of a rifted margin, in km. "
+            "Active (trench-clipped) margins keep their steep plunge at "
+            "every value. 0 = raw kernel-edge cliffs."),
     Control("province_relief", "float", 0.5, 0.0, 1.0, "relief", FULL,
             "primary",
             "Interior structure of continents: basins, shields, raised "
@@ -128,6 +141,12 @@ REGISTRY: list[Control] = [
     Control("hotspot_count", "int", 3, 0, 8, "boundaries", FULL, "primary",
             "Volcanic hotspot chains: island/seamount trails aligned with "
             "plate motion, youngest edifice at the head."),
+    Control("edifice_pedestal", "float", 1.0, 0.0, 2.0, "boundaries", FULL,
+            "advanced",
+            "Constructional pedestal under oceanic volcanoes: the broad "
+            "apron of shield flanks and shed debris that shoals the floor "
+            "around arcs and hotspot islands, so bathymetric contours bow "
+            "around them. 0 = cones sit directly on the raw floor."),
     Control("seafloor_fabric", "float", 0.55, 0.0, 1.0, "relief", FULL,
             "advanced",
             "Abyssal-hill corduroy aligned to the ridge that made the "
@@ -140,7 +159,7 @@ REGISTRY: list[Control] = [
             "advanced",
             "Faint linear lowland scars where continental boundaries "
             "sheared without opening; future rivers will find them."),
-    Control("backarc_basins", "float", 0.55, 0.0, 1.0, "boundaries", FULL,
+    Control("backarc_basins", "float", 0.0, 0.0, 1.0, "boundaries", FULL,
             "advanced",
             "Marginal seas opening behind island arcs (arc offshore, "
             "shallow young basin behind, then the mainland)."),
@@ -209,6 +228,12 @@ REGISTRY: list[Control] = [
             "How buried the sea floor looks: mutes shelf texture (drowned "
             "valleys stay as ghosts) and builds the continental-rise "
             "apron. 0 leaves the raw floor."),
+    Control("rise_feed", "float", 1.0, 0.0, 2.0, "sediment", FULL,
+            "advanced",
+            "How strongly the carve's exported load builds the "
+            "continental rise: margins fed by big drainage grow wide "
+            "gentle aprons at the slope base; starved and trench-clipped "
+            "margins stay lean. 0 = exported mass vanishes (pre-B1)."),
     Control("fan_size", "float", 1.0, 0.0, 2.0, "sediment", FULL, "advanced",
             "Deep-sea fan mounds where major rivers reach deep water; "
             "0 removes them. Deposition never breaches the surface."),

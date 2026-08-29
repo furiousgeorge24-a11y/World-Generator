@@ -20,11 +20,60 @@ import numpy as np
 
 from .noise import fbm
 from .rng import rng_for, salts_for
-from .tectonics import sample_plate_affinity
+from .tectonics import leading_edge, sample_plate_affinity
 from .world import World
 
 _TRIES = 48          # candidates per batch
 _BATCHES = 3         # per cluster; then fall back to densest candidate seen
+
+_LEAD_VN_MIN = 0.05      # closing rate below this: not a real trench
+_LEAD_REACH = 1.0        # kernel-cloud effective radius, in r_base units
+_LEAD_SETBACK_KM = 80.0  # crust margin stops short of the boundary
+
+
+def _lead_shift(world: World, bias: float, u_lead: np.ndarray,
+                cx: float, cy: float, cpl: int, q: float,
+                ew: float, eh: float, r_base: float):
+    """A2 (`active_margin_bias`): displace a cluster center toward its
+    plate's convergent leading edge — the steady state of unmodeled
+    drift is a continent jammed against its trench. No-op unless the
+    plate drew leading status AND the march hits a closing boundary.
+    The shift clamps to the placement margin q (border-stack guarantee:
+    never pulls crust into the frame band). Consumes no RNG itself, so
+    dragging the knob flips plates without reshuffling shapes."""
+    info = {"plate": int(cpl), "leading": False, "applied": False,
+            "hit_km": None, "neighbor": None, "vn": None, "shift_km": 0.0,
+            "center_km": [round(cx, 1), round(cy, 1)]}
+    if bias <= 0.0 or u_lead.size == 0:
+        return cx, cy, info
+    if cpl < 0:                    # affinity off: plate is still knowable
+        pid, _ = sample_plate_affinity(world, np.array([cx]), np.array([cy]))
+        cpl = int(pid[0])
+        info["plate"] = cpl
+    if not (0 <= cpl < u_lead.size) or u_lead[cpl] >= bias:
+        return cx, cy, info
+    info["leading"] = True
+    hit = leading_edge(world, cpl, cx, cy)
+    if hit is None:
+        return cx, cy, info
+    hx, hy, dist, nb, vn = hit
+    info["hit_km"] = [round(hx, 1), round(hy, 1)]
+    info["neighbor"] = nb
+    info["vn"] = round(vn, 4)
+    if vn <= _LEAD_VN_MIN or dist <= 0.0:
+        return cx, cy, info
+    keep = _LEAD_REACH * r_base + _LEAD_SETBACK_KM
+    shift = max(0.0, dist - keep)
+    if shift <= 0.0:
+        return cx, cy, info
+    ux, uy = (hx - cx) / dist, (hy - cy) / dist
+    nx = float(np.clip(cx + ux * shift, q, ew - q))
+    ny = float(np.clip(cy + uy * shift, q, eh - q))
+    info["applied"] = True
+    info["shift_km"] = round(float(np.hypot(nx - cx, ny - cy)), 1)
+    info["from_km"] = [round(cx, 1), round(cy, 1)]
+    info["center_km"] = [round(nx, 1), round(ny, 1)]
+    return nx, ny, info
 
 
 def _place_center(rng_p, a: float, cont: list[int], world: World,
@@ -82,6 +131,14 @@ def stage_crust(world: World) -> None:
                             p=pw / pw.sum())
         cont = sorted(int(p) for p in pick)
 
+    # --- leading-plate draws (A2): own substream, one uniform per plate,
+    # always drawn — dragging `active_margin_bias` flips plates
+    # monotonically without reshuffling anything else -------------------
+    bias = float(c["active_margin_bias"])
+    n_plates = int(world.meta.get("plates", {}).get("count", 0))
+    u_lead = rng_for(world.seed, "crust:leading").random(n_plates)
+    lead_meta: list[dict] = []
+
     # --- nuclei (method B): compact bump kernels, interior-anchored -----
     kernels: list[tuple[float, float, float]] = []        # (cx, cy, r)
     per = rng.integers(2, 6, n_clusters)
@@ -90,6 +147,9 @@ def stage_crust(world: World) -> None:
     cluster_fallback: list[bool] = []
     for ci in range(n_clusters):
         ccx, ccy, cpl, fb = _place_center(rng_p, aff, cont, world, q, ew, eh)
+        ccx, ccy, li = _lead_shift(world, bias, u_lead, ccx, ccy, cpl,
+                                   q, ew, eh, r_base)
+        lead_meta.append(li)
         cluster_plates.append(cpl)
         cluster_fallback.append(fb)
         for _ in range(int(per[ci])):
@@ -160,4 +220,6 @@ def stage_crust(world: World) -> None:
                            "affinity": {"value": aff,
                                         "cont_plates": cont,
                                         "cluster_plates": cluster_plates,
-                                        "cluster_fallback": cluster_fallback}}
+                                        "cluster_fallback": cluster_fallback},
+                           "leading": {"bias": bias,
+                                       "clusters": lead_meta}}

@@ -10,6 +10,7 @@ varies along the map — bold stretches, intricate stretches).
 
 import numpy as np
 
+from .boundaries import _fft_gauss
 from .noise import fbm, value_noise
 from .rng import salts_for
 from .world import World
@@ -55,7 +56,8 @@ def stage_relief(world: World) -> None:
            + world["tect_shoulder"].astype(np.float64)
            + world["tect_era_belt"].astype(np.float64)
            + (world["tect_arc_oo"].astype(np.float64)
-              + world["tect_arc_comp"].astype(np.float64)) * ocean_fade0)
+              + world["tect_arc_comp"].astype(np.float64)
+              + world["tect_arc_ped"].astype(np.float64)) * ocean_fade0)
     pos = np.where(pos > _CEIL, _CEIL + (pos - _CEIL) * 0.22, pos)
     pos *= uf
 
@@ -65,11 +67,31 @@ def stage_relief(world: World) -> None:
     # plus apron rows feeds back more area than the old tanh-capped sum)
     pn = (pot + thr * 0.55 * (np.maximum(pos, 0.0) / _POS_CAP)) / max(thr, 1e-9)
 
-    # --- zones, with margin-typed shelf breadth (R1) ---------------------
+    # --- zone thresholds, with margin-typed shelf breadth (R1) -----------
     act = world["margin_activity"].astype(np.float64)
     shelf_w = float(c["shelf_width"])
     passive_lo = 0.62 - 0.45 * shelf_w
     s_lo = passive_lo + (0.78 - passive_lo) * act
+
+    # --- passive-margin taper (B1): stretched continental crust ----------
+    # Rifted margins thin over 100s of km before the oceanic regime; the
+    # seaward skirt of the platform potential IS that thinned basement.
+    # The lift caps just under the shelf threshold: the taper builds the
+    # gradual slope-and-rise descent, never new shelf (shelf breadth
+    # stays the R1/K1 machinery's job — that keeps banks from carpeting
+    # small maps). Muted where margins are active (the trench keeps its
+    # plunge) and gated by the border falloff (the frame band stays deep).
+    mw = float(c["margin_width_km"])
+    if mw > 0.0:
+        sig_c = max(mw / (2.35 * cell), 1.0)
+        skirt = _fft_gauss(np.minimum(pn, 1.0), sig_c) * 1.15
+        # top of the ramp sits ~-480 m: below the shelf break (the fossil
+        # coastline stays crisp) and below noise reach (no phantom banks)
+        cap = 0.88 * s_lo
+        lift = (np.minimum(skirt, cap)
+                * (1.0 - 0.85 * act)
+                * world["border_falloff"].astype(np.float64))
+        pn = np.maximum(pn, np.where(pn < cap, lift, 0.0))
     land = pn >= 1.0
     shelf = (pn >= s_lo) & ~land
     slope = (pn >= 0.10) & ~land & ~shelf
@@ -104,7 +126,8 @@ def stage_relief(world: World) -> None:
     e += world["tect_graben_w"].astype(np.float64)
     e += world["tect_backarc"].astype(np.float64) * ocean_fade
     e += (world["tect_hotspot"].astype(np.float64)
-          + world["tect_hotspot_comp"].astype(np.float64)) * uf
+          + world["tect_hotspot_comp"].astype(np.float64)
+          + world["tect_hotspot_ped"].astype(np.float64)) * uf
     neg = (world["tect_trench"].astype(np.float64)
            + world["tect_axial"].astype(np.float64))
     e += -4200.0 * np.tanh(-neg / 4200.0) * ocean_fade

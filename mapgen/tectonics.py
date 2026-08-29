@@ -122,6 +122,64 @@ def sample_plate_affinity(world: World, xq, yq):
     return pid, _interior_of(best, second, p["spacing"])
 
 
+def plate_velocity(world: World, plate: int, x, y):
+    """Euler velocity of one plate evaluated at world-km points:
+    v = omega x (p - pole)."""
+    m = world.meta["plates"]
+    px, py = m["poles_km"][plate]
+    om = m["omega"][plate]
+    return -om * (np.asarray(y) - py), om * (np.asarray(x) - px)
+
+
+def leading_edge(world: World, plate: int, cx: float, cy: float):
+    """A2: march from (cx, cy) along the plate's local motion direction
+    until plate ownership changes, using the analytic warped metric
+    (resolution-independent, no RNG). The hit is bisection-refined.
+
+    Returns (hx, hy, dist_km, neighbor, vn) with vn the closing rate
+    across the hit boundary (positive = convergent), or None when the
+    plate barely moves, the ray exits the domain first, or no boundary
+    lies within range."""
+    vx, vy = plate_velocity(world, plate, cx, cy)
+    sp = float(np.hypot(vx, vy))
+    if sp < 1e-9:
+        return None
+    dx, dy = float(vx) / sp, float(vy) / sp
+    eh, ew = world.extent_km
+    spacing = float(world.meta["plates"]["sampling"]["spacing"])
+    step = 0.04 * spacing
+    ts = np.arange(1, int(5.0 * spacing / step) + 2) * step
+    xs, ys = cx + dx * ts, cy + dy * ts
+    inside = (xs >= 0.0) & (xs <= ew) & (ys >= 0.0) & (ys <= eh)
+    if not inside.all():
+        ts = ts[: int(np.argmin(inside))]
+        xs, ys = xs[: ts.size], ys[: ts.size]
+    if ts.size == 0:
+        return None
+    pid, _ = sample_plate_affinity(world, xs, ys)
+    off = np.nonzero(pid != plate)[0]
+    if off.size == 0:
+        return None
+    k = int(off[0])
+    lo = float(ts[k]) - step if k > 0 else 0.0
+    hi = float(ts[k])
+    for _ in range(8):                       # ~km-scale hit accuracy
+        mid = 0.5 * (lo + hi)
+        pm, _ = sample_plate_affinity(world, np.array([cx + dx * mid]),
+                                      np.array([cy + dy * mid]))
+        if int(pm[0]) == plate:
+            lo = mid
+        else:
+            hi = mid
+    hx, hy = cx + dx * hi, cy + dy * hi
+    pn, _ = sample_plate_affinity(world, np.array([hx]), np.array([hy]))
+    nb = int(pn[0])
+    mvx, mvy = plate_velocity(world, plate, hx, hy)
+    nvx, nvy = plate_velocity(world, nb, hx, hy)
+    vn = float((mvx - nvx) * dx + (mvy - nvy) * dy)
+    return float(hx), float(hy), float(hi), nb, vn
+
+
 def stage_plates(world: World) -> None:
     pid, seeds, poles, omega, interior, params = make_plates(world, "now")
     world["plate_id"] = pid

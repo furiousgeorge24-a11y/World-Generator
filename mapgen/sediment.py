@@ -73,6 +73,25 @@ def stage_sediment(world: World) -> None:
         blend = np.where(e > -1000.0, b_shelf, b_rise)
         e = e * (1.0 - w) + np.minimum(blend, -2.0) * w
 
+    # --- exported-sediment rise (B1): the carve's exported load builds
+    # the continental rise. The blur conserves the exported thickness —
+    # this literally spreads the mass the deposit pass shipped off the
+    # shelf edge; _RISE_AMP stands in for the ~100-My accumulation a
+    # snapshot carve can't integrate. Margins fed by big drainage grow
+    # wide aprons; starved and trench-clipped (active) margins stay
+    # lean. Headroom-capped: the rise can never shoal above -500 m.
+    rise_ctl = float(c["rise_feed"])
+    if rise_ctl > 0.0 and "export_flux" in world.layers and ocean.any():
+        src = world["export_flux"].astype(np.float64)
+        if src.any():
+            _RISE_AMP = 30.0
+            apron = _fft_gauss(src, max(130.0 / cell, 2.0))
+            apron *= _RISE_AMP * rise_ctl
+            act = world["margin_activity"].astype(np.float64)
+            headroom = np.maximum(-500.0 - e, 0.0)
+            e += np.minimum(apron * (1.0 - 0.6 * act),
+                            0.55 * headroom) * ocean
+
     # --- major river mouths ---------------------------------------------
     fan_ctl = float(c["fan_size"])
     cny_ctl = float(c["canyon_depth"])

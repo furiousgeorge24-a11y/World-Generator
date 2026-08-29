@@ -456,6 +456,57 @@ Fix program, tiered by cost (author authorizes by name):
   0.8→6, `deposition` 0.6→0.8 (honest: barely visible in 0.6–1.0 —
   constants are the real lever), `plains_grain` 0.5→0.7. Evidence:
   out/tier1_defaults/ sweeps + variety de-risk; smoke 24/24.
+- **A2 — leading-edge crust bias, authorized & implemented (0.8.0):**
+  `active_margin_bias` — the canon's "ranges are often coastal"
+  configuration. Process grounding: continents jam against subduction
+  zones; given fixed plate motions, any crust position short of the
+  convergent boundary is transient, so the shift computes the
+  steady-state attractor of the drift we deliberately don't time-step.
+  Mechanism: one uniform per plate from `crust:leading` (drawn always —
+  dragging the knob flips plates monotonically, reshuffles nothing);
+  for a leading plate, march the analytic warped metric from the
+  cluster center along its Euler velocity to the ownership change
+  (bisection-refined, resolution-independent, RNG-free), gate on
+  closing rate vn > 0.05 (divergent/transform targets stay centered —
+  a continent cannot jam against a ridge), then displace the center to
+  keep-distance 1.0·r_base + 80 km setback from the hit (calibrated:
+  the first cut, 1.6·r_base + 60, parked crust edges short of the
+  boundary — classification stayed oc-oc and the payoff never fired;
+  at 1.0/80 the crust edge just reaches or barely crosses the
+  boundary, which is Earth-true — the margin extends to the trench —
+  and the couplet lights up), clamped to
+  the placement margin q (the border-stack constraint from the frame
+  defect — never pulls crust into the falloff band). Everything
+  visible is painted downstream by existing machinery: classification
+  flips oc-oc → oc-ct on its own, K2 paints the cordillera + trench,
+  margin typing marks it active. bias=0 verified bit-identical to
+  0.7.1 (sha256, seeds 3/5); 5 smoke guards (drag stability,
+  existence, convergence-only, margin clamp, border at bias 1).
+- **B1 — passive-margin bathymetry, authorized & implemented (0.9.0):**
+  three mechanisms, one run (author-answered scope questions
+  2026-08-28: edifice anatomy included; new `margin_width_km` control
+  in physical km; baselines at A2's provisional bias 0.5).
+  *Taper* (relief): the seaward Gaussian skirt of the platform
+  potential is the thinned rifted basement — pn lifted to
+  max(pn, skirt), capped at 0.88·s_lo so the ramp tops ~−480 m
+  (design choice: the fossil shelf break stays crisp and the pale
+  platform grammar stays the drowned datum's job — a first cut that
+  capped near the shelf threshold carpeted small maps with noise
+  banks), muted by `margin_activity` (trench plunge survives), gated
+  by border falloff (frame band stays deep).
+  *Rise* (erosion + sediment): `_deposit` now records where exported
+  mass leaves the system (`export_flux` layer); sediment spreads it
+  with a sum-conserving σ130 km blur into slope-base aprons
+  (`rise_feed`, `_RISE_AMP` 30 standing in for ~100-My accumulation),
+  depth-gated below −500 m, damped on active margins.
+  *Edifice pedestal* (boundaries): `arc_ped`/`hotspot_ped`/
+  `hotspot_y_ped` fields (σ110–120) ride the same cone sources scaled
+  by `edifice_pedestal` — islands stand on shoaled floor and contours
+  bow around them emergently (the "floating island" fix).
+  All three zero out: {margin_width_km 0, edifice_pedestal 0,
+  rise_feed 0} verified bit-identical to 0.8.0 (sha256, seeds 3/5).
+  4 smoke guards (coastline-essentially-unchanged, border at
+  extremes, rise depth gate, pedestal monotone shoal).
 - **Tier 2 — belt-and-basin anatomy run, unauthorized** (expanded
   2026-08-28 after the author flagged inland-water anatomy: belt
   mega-lakes read wrong — many, massive, smooth — vs ref7's small
@@ -486,7 +537,9 @@ Fix program, tiered by cost (author authorizes by name):
   (strengthen `province_relief` into 500–1,500 km epeirogenic
   undulation + deposition filling the lows — gap 2; superswells/terrane
   blocks extend later), river-overlay test sheet (render read of
-  hydrology — gap 4), and **B1 — passive-margin bathymetry** (gap 6,
+  hydrology — gap 4), and **B1 — passive-margin bathymetry**
+  (graduated: authorized and implemented at 0.9.0 — see its entry
+  below; the original diagnosis stays here for the record) (gap 6,
   author-flagged 2026-08-28: depth plunges after every shoreline;
   canon plunges only at faults/trenches). Two mechanisms, one run:
   *stretched-margin crustal taper* — passive margins extend the crust

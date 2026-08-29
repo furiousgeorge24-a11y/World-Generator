@@ -38,12 +38,13 @@ ABL = {
         ("hotspot_count=0", {"hotspot_count": 0}),
         ("plateau_tendency=0", {"plateau_tendency": 0.0}),
         ("crust_plate_affinity=0", {"crust_plate_affinity": 0.0}),
+        ("active_margin_bias=0", {"active_margin_bias": 0.0}),
     ],
     "_abl_flourishes": [
         ("baseline", {}),
         ("rift_maturity=0", {"rift_maturity": 0.0}),
         ("failed_rifts=0", {"failed_rifts": 0.0}),
-        ("backarc_basins=0", {"backarc_basins": 0.0}),
+        ("backarc_basins=0.55 (old default, now 0)", {"backarc_basins": 0.55}),
         ("seafloor_fabric=0", {"seafloor_fabric": 0.0}),
         ("province_relief=0", {"province_relief": 0.0}),
         ("tectonic_grain=0", {"tectonic_grain": 0.0}),
@@ -68,6 +69,9 @@ ABL = {
         ("shelf_width=0", {"shelf_width": 0.0}),
         ("ridge_swell=0", {"ridge_swell": 0.0}),
         ("lake_min_depth=0.8 (old default)", {"lake_min_depth_m": 0.8}),
+        ("margin_width_km=0", {"margin_width_km": 0.0}),
+        ("edifice_pedestal=0", {"edifice_pedestal": 0.0}),
+        ("rise_feed=0", {"rise_feed": 0.0}),
     ],
 }
 

@@ -78,6 +78,62 @@ check("affinity=1 anchors cores to continental plates", anchored)
 check("border invariant holds at affinity=1",
       next(f for f in wa.findings if f["check"] == "border_ring")["ok"])
 
+# 8b. leading-edge bias (A2): dragging the knob never moves unshifted
+# clusters; shifts exist, are convergent-only, and respect the
+# placement margin; border invariant holds at full bias
+wl0 = pipeline.generate(7, {"active_margin_bias": 0.0}, 192)
+wl1 = pipeline.generate(7, {"active_margin_bias": 1.0}, 192)
+cl0 = wl0.meta["crust"]["leading"]["clusters"]
+cl1 = wl1.meta["crust"]["leading"]["clusters"]
+check("bias drag leaves unshifted clusters in place",
+      all(a["center_km"] == b["center_km"]
+          for a, b in zip(cl0, cl1) if not b["applied"]))
+applied = [li for li in cl1 if li["applied"]]
+for s in (11, 3, 5):
+    if applied:
+        break
+    wl = pipeline.generate(s, {"active_margin_bias": 1.0}, 192)
+    applied = [li for li in wl.meta["crust"]["leading"]["clusters"]
+               if li["applied"]]
+check("bias=1 produces a leading-edge shift on some seed", len(applied) > 0)
+check("shifts are convergent-only",
+      all(li["vn"] is not None and li["vn"] > 0.05 for li in applied))
+min_l = 192 * wl1.cell_km
+qmargin = min(0.13 * min_l, 0.35 * min_l)
+check("shifted centers respect the placement margin",
+      all(qmargin - 0.1 <= v <= min_l - qmargin + 0.1
+          for li in applied for v in li["center_km"]))
+check("border invariant holds at bias=1",
+      next(f for f in wl1.findings if f["check"] == "border_ring")["ok"])
+
+# 8c. passive-margin bathymetry (B1): the taper only shallows ocean
+# (land can gain banks, never lose coast); border holds at B1 extremes;
+# the rise never shoals above its depth gate; pedestals only add
+_B1OFF = {"margin_width_km": 0.0, "edifice_pedestal": 0.0,
+          "rise_feed": 0.0, "canyon_depth": 0.0, "fan_size": 0.0}
+wb0 = pipeline.generate(9, dict(_B1OFF), 192)
+wb1 = pipeline.generate(9, dict(_B1OFF, margin_width_km=300.0), 192)
+l0 = wb0["elevation"] >= 0
+l1 = wb1["elevation"] >= 0
+check("margin taper leaves coastlines essentially alone",
+      float((l0 != l1).mean()) < 0.004)
+wbx = pipeline.generate(9, {"margin_width_km": 500.0,
+                            "edifice_pedestal": 2.0, "rise_feed": 2.0}, 192)
+check("border invariant holds at B1 extremes",
+      next(f for f in wbx.findings if f["check"] == "border_ring")["ok"])
+wr = pipeline.generate(9, dict(_B1OFF, rise_feed=2.0), 192)
+dr = wr["elevation"].astype(float) - wb0["elevation"].astype(float)
+shallow0 = wb0["elevation"].astype(float) >= -499.0
+check("rise builds only below its depth gate",
+      float(np.abs(dr[shallow0]).max()) < 1e-3 and float(dr.max()) > 0.0)
+_RAW = dict(_B1OFF, erosion_strength=0.0, wave_planation=0.0,
+            sediment_softening=0.0)          # pure construction, no carve
+wq0 = pipeline.generate(9, dict(_RAW), 192)
+wp = pipeline.generate(9, dict(_RAW, edifice_pedestal=1.0), 192)
+dp_ = wp["elevation"].astype(float) - wq0["elevation"].astype(float)
+check("edifice pedestal only shoals (and does shoal)",
+      float(dp_.min()) > -1e-3 and float(dp_.max()) > 60.0)
+
 # 9. KR palettes: every palette renders; canon differs from classic
 imgs = []
 for p in range(4):
@@ -125,8 +181,12 @@ def _lowland_texture(e):
     return float(np.abs(hp[m]).mean())
 
 
-g0 = pipeline.generate(17, {"plains_grain": 0.0}, 192)["elevation"].astype(float)
-g1 = pipeline.generate(17, {"plains_grain": 1.0}, 192)["elevation"].astype(float)
+_PIN = {"active_margin_bias": 0.0, "margin_width_km": 0.0,
+        "edifice_pedestal": 0.0, "rise_feed": 0.0}   # measure grain on the
+g0 = pipeline.generate(17, dict(_PIN, plains_grain=0.0),  # K3-era world
+                       192)["elevation"].astype(float)
+g1 = pipeline.generate(17, dict(_PIN, plains_grain=1.0),
+                       192)["elevation"].astype(float)
 low0, low1 = _lowland_texture(g0), _lowland_texture(g1)
 check(f"plains grain textures lowlands ({low0:.2f} -> {low1:.2f} m/cell)",
       low1 > low0 + 0.4)

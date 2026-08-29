@@ -42,6 +42,9 @@ _SIGMA = {
     "hotspot_comp": (120.0, 0.12),
     "hotspot_y": (30.0, 0.04),
     "hotspot_y_comp": (120.0, 0.12),
+    "arc_ped": (120.0, 0.12),
+    "hotspot_ped": (110.0, 0.11),
+    "hotspot_y_ped": (110.0, 0.11),
     "volcanic": (40.0, 0.05),
     "orient_c": (65.0, 0.08),
     "orient_s": (65.0, 0.08),
@@ -358,6 +361,11 @@ def stage_boundaries(world: World) -> None:
                   3450.0 * amp[m] * orog * amod[m], _SIGMA["arc_oo"][0])
             splat(grids["arc_comp"], ar, ac,
                   -930.0 * amp[m] * orog * amod[m], _SIGMA["arc_comp"][0])
+            # B1 edifice anatomy: constructional pedestal — the pile's
+            # submarine flanks shoal the floor around the arc line
+            splat(grids["arc_ped"], ar, ac,
+                  520.0 * amp[m] * orog * amod[m]
+                  * float(c["edifice_pedestal"]), _SIGMA["arc_ped"][0])
             splat(grids["volcanic"], ar, ac, amp[m], _SIGMA["volcanic"][0])
             if back_ctl > 0.0:
                 bk = 2.6 * g
@@ -481,6 +489,9 @@ def stage_boundaries(world: World) -> None:
                 splat(grids[tgt], rrj, ccj, aj, _SIGMA[tgt][0])
                 splat(grids[tgt + "_comp"], rrj, ccj, -0.30 * aj,
                       _SIGMA[tgt + "_comp"][0])
+                splat(grids[tgt + "_ped"], rrj, ccj,
+                      0.16 * aj * float(c["edifice_pedestal"]),
+                      _SIGMA[tgt + "_ped"][0])
                 splat(grids["volcanic"], rrj, ccj, np.array([1.0]),
                       _SIGMA["volcanic"][0])
                 hx += (vx / vv) * step          # older cones carried away
@@ -501,8 +512,9 @@ def stage_boundaries(world: World) -> None:
     world["volcanic"] = np.clip(vol / max(ref, 1e-9), 0.0, 1.0).astype(np.float32)
     pos = (fields["cordillera"] + fields["cordillera_n"] + fields["crest"]
            + fields["plateau"] + fields["apron"] + fields["arc_oo"]
-           + fields["arc_comp"] + fields["shoulder"] + fields["rise"]
-           + fields["hotspot"] + fields["hotspot_comp"])
+           + fields["arc_comp"] + fields["arc_ped"] + fields["shoulder"]
+           + fields["rise"] + fields["hotspot"] + fields["hotspot_comp"]
+           + fields["hotspot_ped"])
     neg = (fields["trench"] + fields["graben"] + fields["graben_w"]
            + fields["axial"] + fields["fracture"] + fields["backarc"]
            + fields["foreland"])

@@ -108,6 +108,7 @@ def _deposit(e_pre: np.ndarray, e_post: np.ndarray, order: np.ndarray,
     rl = recv.ravel().tolist()
     dxl = (_DIST8[np.clip(dir8, 0, 7)] * cell).ravel().tolist()
     flux = [0.0] * len(el)
+    exp_map = [0.0] * len(el)      # B1: where mass leaves the system
     dep = basin = exported = 0.0
     edge = base - 600.0
     for i in order.tolist():
@@ -124,6 +125,7 @@ def _deposit(e_pre: np.ndarray, e_post: np.ndarray, order: np.ndarray,
                 carry -= d
             if j < 0 or el[j] < edge:       # off the shelf edge: exported
                 exported += carry
+                exp_map[i] += carry
             else:
                 flux[j] += carry
             continue
@@ -142,7 +144,8 @@ def _deposit(e_pre: np.ndarray, e_post: np.ndarray, order: np.ndarray,
             carry -= d
         flux[j] += carry
     return (np.asarray(el, dtype=np.float64).reshape(e_post.shape),
-            dep, basin, exported)
+            dep, basin, exported,
+            np.asarray(exp_map, dtype=np.float64).reshape(e_post.shape))
 
 
 def stage_erosion(world: World) -> None:
@@ -161,6 +164,7 @@ def stage_erosion(world: World) -> None:
         frac = float(c["deposition"])
         e0 = e.copy()
         dep_t = basin_t = exp_t = 0.0
+        exp_acc = np.zeros(world.shape, dtype=np.float64)
         F = dir8 = recv = acc = order = None
         for step in range(steps):
             if step % 3 == 0 or F is None:      # re-route every 3rd step
@@ -176,15 +180,17 @@ def stage_erosion(world: World) -> None:
             e = _implicit_incise(e, order, dir8, recv, acc, K, cell,
                                  floor, taper_p)
             if frac > 0.0:
-                e, dp, bs, ex = _deposit(e_pre, e, order, dir8, recv,
-                                         cell, frac, base)
+                e, dp, bs, ex, em = _deposit(e_pre, e, order, dir8, recv,
+                                             cell, frac, base)
                 dep_t += dp
                 basin_t += bs
                 exp_t += ex
+                exp_acc += em
             if d > 0.0:
                 e = _diffuse(e, d, base)
         world.meta["rough_acc"] = acc.astype(np.float32)
-        eroded = np.maximum(e0 - e, 0.0)
+        world["export_flux"] = exp_acc.astype(np.float32)   # B1: feeds the
+        eroded = np.maximum(e0 - e, 0.0)                    # rise apron
         shelf = (e > base) & (e < 0.0)   # carved while exposed, drowned now
         vol = cell * cell / 1e3
         world.findings.append(
@@ -199,6 +205,7 @@ def stage_erosion(world: World) -> None:
     if "tect_hotspot_y" in world.layers:
         uf = world["uplift_falloff"].astype(np.float64)
         e = e + (world["tect_hotspot_y"].astype(np.float64)
-                 + world["tect_hotspot_y_comp"].astype(np.float64)) * uf
+                 + world["tect_hotspot_y_comp"].astype(np.float64)
+                 + world["tect_hotspot_y_ped"].astype(np.float64)) * uf
 
     world["elevation"] = e.astype(np.float32)
