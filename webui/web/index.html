@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>preview</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; display: flex; height: 100vh; overflow: hidden;
+         background: #17181c; color: #d8d9de;
+         font: 13px/1.45 system-ui, sans-serif; }
+  #panel { width: 340px; min-width: 340px; overflow-y: auto; padding: 14px;
+           background: #1e2026; border-right: 1px solid #2c2e36; }
+  #view { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #stage { flex: 1; position: relative; overflow: hidden; cursor: grab;
+           background: #101116; user-select: none; touch-action: none;
+           overscroll-behavior: contain; }
+  #stage.dragging { cursor: grabbing; }
+  #map { position: absolute; left: 0; top: 0; transform-origin: 0 0;
+         image-rendering: pixelated; user-select: none; -webkit-user-drag: none; }
+  /* promote to its own layer only while dragging: panning a 512px PNG at 80x
+     is a compositor move instead of a repaint, but the layer isn't held. */
+  #stage.dragging #map { will-change: transform; }
+  #zoomlbl { position: absolute; right: 10px; top: 8px; color: #8a8d99;
+             background: #17181cd0; padding: 2px 8px; border-radius: 4px;
+             font-size: 11px; pointer-events: none; }
+  #hist { height: 84px; display: flex; gap: 6px; align-items: center;
+          overflow-x: auto; padding: 6px 8px; background: #1a1b20;
+          border-top: 1px solid #2c2e36; }
+  .thumb { height: 66px; cursor: pointer; border: 2px solid transparent;
+           image-rendering: pixelated; flex: 0 0 auto; }
+  .thumb.sel { border-color: #5b7fe0; }
+  h1 { font-size: 15px; margin: 0 0 10px; }
+  .ver { color: #6f7280; font-weight: normal; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+  .row label { flex: 1; }
+  .ctl { margin: 10px 0 2px; }
+  .ctl .name { display: flex; justify-content: space-between; }
+  .ctl .name b { font-weight: 600; }
+  .ctl .name .val { color: #9fb7ff; font-variant-numeric: tabular-nums; }
+  .ctl input[type=range] { width: 100%; }
+  .ctl .promise { color: #797c88; font-size: 11px; margin-top: 1px; }
+  .stub b { color: #c9a44a; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: #a0a3ae; }
+  button { background: #3556b8; color: #fff; border: 0; border-radius: 5px;
+           padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  button:hover { background: #3f63d0; }
+  button:disabled { background: #333640; color: #808495; }
+  input[type=number], select { background: #14151a; color: #d8d9de;
+           border: 1px solid #33363f; border-radius: 4px; padding: 4px 6px; }
+  #seed { width: 90px; }
+  #status { margin-top: 8px; color: #8a8d99; min-height: 18px; }
+  #status .warn { color: #d9b84a; }
+  #stale { color: #d9b84a; display: none; margin-left: 8px; }
+  pre { background: #14151a; padding: 8px; border-radius: 5px; overflow: auto;
+        font-size: 11px; max-height: 320px; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h1><span id="appname">preview</span> <span class="ver" id="ver"></span></h1>
+  <div class="row">
+    <label>seed <input type="number" id="seed" value="1"></label>
+    <button id="dice" title="random seed">&#127922;</button>
+    <select id="size">
+      <option>128</option><option selected>256</option>
+      <option>384</option><option>512</option>
+    </select>
+  </div>
+  <div class="row">
+    <label>view
+      <select id="vsel"><option>hypsometric</option></select>
+    </label>
+    <button id="gen">Generate</button><span id="stale">&#9888; stale</span>
+  </div>
+  <div id="primary"></div>
+  <details><summary>advanced</summary><div id="advanced"></div></details>
+  <div id="status"></div>
+  <details><summary>report</summary><pre id="report"></pre></details>
+</div>
+<div id="view">
+  <div id="stage">
+    <img id="map" alt="generated image">
+    <div id="zoomlbl"></div>
+  </div>
+  <div id="hist"></div>
+</div>
+<script>
+"use strict";
+const values = {};
+/* The base view every pipeline is expected to offer (see webui/README.md):
+   this repository's aesthetic reference images are hypsometric renders, so
+   the viewer and the history rail prefer it whenever a backend provides it,
+   and fall back to the backend's first view when it does not. */
+const BASE_VIEW = "hypsometric";
+let defaultView = BASE_VIEW;
+const $ = id => document.getElementById(id);
+
+function fmt(v, c) { return c.ctype === "float" ? (+v).toPrecision(4).replace(/\.?0+$/, "") : v; }
+
+function makeControl(c) {
+  const div = document.createElement("div");
+  div.className = "ctl" + (c.temp ? " stub" : "");
+  const name = document.createElement("div");
+  name.className = "name";
+  name.innerHTML = "<b>" + c.name + "</b><span class='val' id='v_" + c.name + "'></span>";
+  div.appendChild(name);
+  let input;
+  if (c.ctype === "bool") {
+    input = document.createElement("input");
+    input.type = "checkbox"; input.checked = !!c.default;
+  } else {
+    input = document.createElement("input");
+    input.type = "range"; input.min = c.lo; input.max = c.hi;
+    input.step = c.ctype === "int" ? 1 : (c.hi - c.lo) / 200;
+    input.value = c.default;
+  }
+  input.id = "in_" + c.name;
+  input.addEventListener("input", () => {
+    values[c.name] = c.ctype === "bool" ? input.checked
+                   : c.ctype === "int" ? parseInt(input.value) : parseFloat(input.value);
+    $("v_" + c.name).textContent = fmt(values[c.name], c);
+    if (c.invalidates === "render") { schedule(); } else { $("stale").style.display = "inline"; }
+  });
+  div.appendChild(input);
+  const p = document.createElement("div");
+  p.className = "promise"; p.textContent = c.promise;
+  div.appendChild(p);
+  values[c.name] = c.default;
+  return div;
+}
+
+/* ---- pan / zoom ---------------------------------------------------- */
+const stage = $("stage"), map = $("map");
+let scale = 1, tx = 0, ty = 0, fitScale = 1;
+function applyT() {
+  map.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`;
+  $("zoomlbl").textContent = Math.round(scale * 100) + "%";
+}
+function fit() {
+  if (!map.naturalWidth) return;
+  fitScale = Math.min(stage.clientWidth / map.naturalWidth,
+                      stage.clientHeight / map.naturalHeight) * 0.96;
+  scale = fitScale;
+  tx = (stage.clientWidth - map.naturalWidth * scale) / 2;
+  ty = (stage.clientHeight - map.naturalHeight * scale) / 2;
+  applyT();
+}
+map.addEventListener("load", () => { if (!map.dataset.keepview) fit(); delete map.dataset.keepview; });
+stage.addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = stage.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const f = e.deltaY < 0 ? 1.25 : 0.8;
+  const ns = Math.min(Math.max(scale * f, fitScale * 0.5), 80);
+  tx = mx - (mx - tx) * (ns / scale);
+  ty = my - (my - ty) * (ns / scale);
+  scale = ns;
+  applyT();
+}, { passive: false });
+/* Pan: press primary button, move, release. Pointer Events + pointer capture
+   so the drag survives leaving the stage or the window entirely (a mouseup
+   over another app is still delivered here), and so pen/touch pan for free.
+   Transform writes are coalesced to one per frame. */
+let panId = null, panX = 0, panY = 0, panRaf = 0;
+
+function panFlush() { panRaf = 0; applyT(); }
+
+function endPan(e) {
+  if (panId === null || (e && e.pointerId !== panId)) return;
+  if (stage.hasPointerCapture(panId)) stage.releasePointerCapture(panId);
+  panId = null;
+  stage.classList.remove("dragging");
+  if (panRaf) { cancelAnimationFrame(panRaf); panFlush(); }
+}
+
+stage.addEventListener("pointerdown", e => {
+  // primary button of the primary pointer only: right/middle drags and extra
+  // touch points must not hijack (or silently stick) the pan.
+  if (panId !== null || !e.isPrimary || e.button !== 0) return;
+  panId = e.pointerId;
+  panX = e.clientX; panY = e.clientY;
+  stage.setPointerCapture(panId);
+  stage.classList.add("dragging");
+});
+
+stage.addEventListener("pointermove", e => {
+  if (e.pointerId !== panId) return;
+  if (!(e.buttons & 1)) { endPan(e); return; }  // button released unseen
+  tx += e.clientX - panX; ty += e.clientY - panY;
+  panX = e.clientX; panY = e.clientY;
+  if (!panRaf) panRaf = requestAnimationFrame(panFlush);
+});
+
+stage.addEventListener("pointerup", endPan);
+stage.addEventListener("pointercancel", endPan);
+stage.addEventListener("lostpointercapture", endPan);
+// Firefox ignores -webkit-user-drag; without this the image's native
+// drag-and-drop starts and swallows the rest of the gesture.
+map.addEventListener("dragstart", e => e.preventDefault());
+stage.addEventListener("dblclick", fit);
+window.addEventListener("resize", fit);
+
+/* ---- history rail --------------------------------------------------- */
+/* Each entry holds every view of one generation. The rail always shows the
+   base view (hypsometric where offered); the selector picks which view of the
+   selected entry the main viewer draws. Selecting an entry never touches the
+   selector. */
+const HIST_MAX = 16;
+const hist = [];
+let current = null;
+
+function paint(entry, keepView) {
+  if (!entry) return;
+  const want = $("vsel").value;
+  const src = entry.images[want] || entry.images[entry.view] ||
+              Object.values(entry.images)[0];
+  if (!src) return;
+  if (keepView) map.dataset.keepview = "1";
+  map.src = src;
+}
+function showEntry(entry, keepView) {
+  current = entry;
+  paint(entry, keepView);
+  $("report").textContent = JSON.stringify(entry.report, null, 2);
+  for (const h of hist) h.el.classList.toggle("sel", h === entry);
+}
+function addHist(data, label) {
+  const entry = { images: data.images, view: data.view,
+                  report: data.report, el: null };
+  const el = document.createElement("img");
+  el.className = "thumb";
+  el.src = entry.images[defaultView] || entry.images[data.view] ||
+           Object.values(entry.images)[0];
+  el.title = label;
+  entry.el = el;
+  el.addEventListener("click", () => showEntry(entry, true));
+  hist.unshift(entry);
+  $("hist").prepend(el);
+  while (hist.length > HIST_MAX) $("hist").removeChild(hist.pop().el);
+  showEntry(entry, false);
+}
+
+/* ---- generation ----------------------------------------------------- */
+let timer = null, busy = false, queued = false;
+function schedule() { clearTimeout(timer); timer = setTimeout(go, 120); }
+
+async function go() {
+  if (busy) { queued = true; return; }
+  busy = true; $("gen").disabled = true;
+  $("status").textContent = "generating…";
+  try {
+    const seed = +$("seed").value, size = +$("size").value;
+    const res = await fetch("/api/generate", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ seed, size, view: $("vsel").value, controls: values })
+    });
+    const data = await res.json();
+    const vsel = $("vsel");
+    if (data.views && data.views.length) {
+      defaultView = data.views.includes(BASE_VIEW) ? BASE_VIEW : data.views[0];
+    }
+    if (data.views && [...vsel.options].map(o => o.value).join() !== data.views.join()) {
+      const cur = vsel.value;
+      vsel.innerHTML = "";
+      for (const v of data.views) {
+        const o = document.createElement("option");
+        o.value = o.textContent = v;
+        vsel.appendChild(o);
+      }
+      vsel.value = data.views.includes(cur) ? cur : defaultView;
+    }
+    addHist(data, `s${seed} ${size}²`);
+    const warns = (data.report.findings || []).filter(f => f.level === "warn");
+    $("status").innerHTML = data.elapsed_s + "s" + (data.cached ? " (cached sim)" : "")
+      + (warns.length ? " <span class='warn'>&#9888; " + warns.length + " finding(s)</span>" : "");
+    $("stale").style.display = "none";
+  } catch (err) {
+    $("status").textContent = "error: " + err;
+  }
+  busy = false; $("gen").disabled = false;
+  if (queued) { queued = false; go(); }
+}
+
+async function init() {
+  const data = await (await fetch("/api/registry")).json();
+  $("appname").textContent = data.name || "preview";
+  document.title = (data.name || "preview") + " preview";
+  $("ver").textContent = data.version ? "v" + data.version : "";
+  for (const c of data.controls) {
+    (c.tier === "primary" ? $("primary") : $("advanced")).appendChild(makeControl(c));
+    $("v_" + c.name).textContent = fmt(c.default, c);
+  }
+  $("gen").addEventListener("click", go);
+  $("dice").addEventListener("click", () => {
+    $("seed").value = Math.floor(Math.random() * 100000); go();
+  });
+  $("seed").addEventListener("change", go);
+  $("size").addEventListener("change", go);
+  $("vsel").addEventListener("change", () => paint(current, true));
+  go();
+}
+init();
+</script>
+</body>
+</html>
