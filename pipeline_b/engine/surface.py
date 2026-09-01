@@ -54,6 +54,21 @@ def _bilinear(F, y_km, x_km, ck):
     return top + fy * (bot - top)
 
 
+def _masked_bilinear(F, valid, y_km, x_km, ck):
+    """Bilinear sample without diluting valid values with zero backing.
+
+    Lake levels are sparse fields: zero means "no lake", not a zero-m
+    water datum. Normalizing by interpolated validity preserves a flat
+    basin level through its soft sampling footprint.
+    """
+    valid_f = valid.astype(np.float64)
+    weight = _bilinear(valid_f, y_km, x_km, ck)
+    numer = _bilinear(np.where(valid, F, 0.0), y_km, x_km, ck)
+    out = np.zeros(np.broadcast(y_km, x_km).shape, np.float64)
+    np.divide(numer, weight, out=out, where=weight > 1e-12)
+    return out
+
+
 def _cr_w(t):
     """Catmull-Rom weights for offsets (-1, 0, 1, 2) at fraction t."""
     t2 = t * t
@@ -101,18 +116,59 @@ def _bicubic(F, y_km, x_km, ck):
     return np.clip(out, lo, hi)
 
 
-def sample_map(s, ce, er, cfg, seed, size):
-    """Frame window at output resolution."""
+def sample_map(s, ce, er, cfg, seed, size, *, _frame_window_km=None):
+    """Frame window at output resolution.
+
+    ``_frame_window_km`` is a private atlas/local-process experiment seam
+    in ``(y0_km, x0_km, span_km)`` order.  Public callers retain the
+    original centered-frame path exactly.
+    """
     ck = s.world_km / s.n
-    f0, f1 = s.frame_slice
-    frame_km = (f1 - f0) * ck
-    km_px = frame_km / size
-    q = (np.arange(size) + 0.5) * km_px
-    x_km = (f0 * ck + q)[None, :]
-    y_km = (f0 * ck + q)[:, None]
+    if _frame_window_km is None:
+        f0, f1 = s.frame_slice
+        frame_km = (f1 - f0) * ck
+        km_px = frame_km / size
+        q = (np.arange(size) + 0.5) * km_px
+        x_km = (f0 * ck + q)[None, :]
+        y_km = (f0 * ck + q)[:, None]
+        x_sample = x_km
+        y_sample = y_km
+        frame_x0 = frame_y0 = f0 * ck
+    else:
+        if len(_frame_window_km) != 3:
+            raise ValueError(
+                "_frame_window_km must be (y0_km, x0_km, span_km)")
+        frame_y0, frame_x0, frame_km = (
+            float(value) for value in _frame_window_km)
+        if (frame_km <= 0.0 or frame_x0 < 0.0 or frame_y0 < 0.0
+                or frame_x0 + frame_km > s.world_km
+                or frame_y0 + frame_km > s.world_km):
+            raise ValueError("_frame_window_km lies outside the world")
+        km_px = frame_km / size
+        q = (np.arange(size) + 0.5) * km_px
+        x_km = (frame_x0 + q)[None, :]
+        y_km = (frame_y0 + q)[:, None]
+
+        process_y0, process_x0 = er.get("process_origin_km", (0.0, 0.0))
+        e_km = float(er["e_km"])
+        process_ny, process_nx = er["z"].shape
+        # Catmull-Rom reads one cell beyond each bracketing interval.
+        # Refuse to let edge clamping turn a local-domain edge into a
+        # synthetic terrain contour.
+        support = 2.0 * e_km
+        if (frame_x0 < process_x0 + support
+                or frame_y0 < process_y0 + support
+                or frame_x0 + frame_km
+                > process_x0 + process_nx * e_km - support
+                or frame_y0 + frame_km
+                > process_y0 + process_ny * e_km - support):
+            raise ValueError(
+                "localized process domain lacks cubic support for frame")
+        x_sample = x_km - process_x0
+        y_sample = y_km - process_y0
 
     e_km = er["e_km"]
-    hc = _bicubic(er["z"], y_km, x_km, e_km)
+    hc = _bicubic(er["z"], y_sample, x_sample, e_km)
 
     # fine-band texture (octaves MID_OCTAVES.. of the same stack)
     land_amp = 80.0 + 0.10 * np.maximum(hc, 0.0)
@@ -132,22 +188,24 @@ def sample_map(s, ce, er, cfg, seed, size):
     h = hc + cfg.detail_amplitude * FINE_SCALE * amp * det
 
     ocean = (h < 0.0) & (hc < 0.0)
-    ld = _bilinear(er["lake_depth"], y_km, x_km, e_km)
-    lsurf = _bilinear(er["lake_surf"], y_km, x_km, e_km)
-    # lake shorelines are cut by the OUTPUT terrain against the
-    # interpolated lake surface — cell-sharp masks drew square lakes
-    # (judge-caught at M3 eval); the water level is the physical line
+    ld = _bilinear(er["lake_depth"], y_sample, x_sample, e_km)
+    lake_cells = er["lake_depth"] > 0.0
+    lsurf = _masked_bilinear(er["lake_surf"], lake_cells,
+                             y_sample, x_sample, e_km)
+    # Lake shorelines are cut by OUTPUT terrain against the basin's flat
+    # water surface. Bilinear depth keeps a soft process-cell footprint;
+    # masked level sampling prevents dilution by zero-valued dry cells.
     lake = (ld > 1.5) & (h < lsurf) & ~ocean
     # discharge is a LINEAR feature one process-cell wide — bilinear
     # sampling smears the peak below any threshold; nearest keeps the
     # channel line intact
     ney, nex = er["discharge_log"].shape
-    iy = np.clip((y_km / e_km).astype(np.int64), 0, ney - 1)
-    ix = np.clip((x_km / e_km).astype(np.int64), 0, nex - 1)
+    iy = np.clip((y_sample / e_km).astype(np.int64), 0, ney - 1)
+    ix = np.clip((x_sample / e_km).astype(np.int64), 0, nex - 1)
     riv_log = er["discharge_log"][iy, ix]
-    sed = _bilinear(er["sed"], y_km, x_km, e_km)
+    sed = _bilinear(er["sed"], y_sample, x_sample, e_km)
 
-    return {
+    result = {
         "h": h.astype(np.float32),
         "hc": hc.astype(np.float32),
         "water": ocean | lake,
@@ -157,7 +215,10 @@ def sample_map(s, ce, er, cfg, seed, size):
         "riv_log": riv_log.astype(np.float32),
         "sed": sed.astype(np.float32),
         "river_edges": er["river_edges"],
-        "frame_origin_km": f0 * ck,
+        "frame_origin_km": frame_x0,
         "km_per_px": km_px,
         "size": size,
     }
+    if _frame_window_km is not None:
+        result["_frame_window_km"] = (frame_y0, frame_x0, frame_km)
+    return result

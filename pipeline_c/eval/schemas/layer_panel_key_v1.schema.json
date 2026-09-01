@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mapgen:pipeline-c:eval:layer-panel-key:v1",
+  "title": "Pipeline C hidden layer-audit panel key v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "prompt_id",
+    "panels"
+  ],
+  "properties": {
+    "schema_id": {
+      "const": "urn:mapgen:pipeline-c:eval:layer-panel-key:v1"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "prompt_id": {
+      "const": "layer_audit_v1"
+    },
+    "panels": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "panel",
+          "hidden_kind",
+          "source_id",
+          "duplicate_group",
+          "stimulus_sha256",
+          "true_mechanism",
+          "crop_factor",
+          "window"
+        ],
+        "properties": {
+          "panel": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "hidden_kind": {
+            "enum": [
+              "candidate",
+              "control_formulaic",
+              "control_process"
+            ]
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "duplicate_group": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "stimulus_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "true_mechanism": {
+            "oneOf": [
+              {
+                "$ref": "layer_audit_v1.schema.json#/$defs/mechanism_label"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "crop_factor": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "window": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "top",
+              "left",
+              "extent"
+            ],
+            "properties": {
+              "top": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "left": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "extent": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

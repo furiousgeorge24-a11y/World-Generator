@@ -1,8 +1,11 @@
 # Design — pipeline_b
 
 Architecture and working rules for the clean-room generator. The
-promises live in `CONTRACT.md`; this file records how we intend to keep
-them. Ratified by the author 2026-08-29; refined as we learn.
+promises live in [`CONTRACT.md`](CONTRACT.md); this file records how we
+intend to keep them. Current milestone state is in
+[`MILESTONES.md`](MILESTONES.md), and private experiments are indexed in
+[`ATTEMPT_REGISTER.md`](ATTEMPT_REGISTER.md). Ratified by the author
+2026-08-29; refined as we learn.
 
 ## Paradigm (ratified)
 
@@ -12,24 +15,27 @@ solvers below it.**
 - **Tectonic history** runs time-stepped at a **fixed coarse scale**
   (coarse lattice/mesh in km-space). Output resolution never touches
   this stage, so structural resolution independence holds by
-  construction, and cost is capped. History is what buys coupling: a
-  collision zone automatically has its trench offshore, its belt
-  onshore, its narrow shelf between. Products: crust type, crust age,
-  belt geometry/age/polarity, margin classes, boundary systems,
-  hotspot tracks.
-- **Steady-state derivation at output resolution**: baseline elevation
-  from isostasy + thermal subsidence (seafloor depth tracks crust age —
+  construction, and cost is capped. History is what buys coupling: in
+  subduction settings, a collision zone can share one cause with its
+  trench offshore, belt onshore, and intervening narrow shelf. Products
+  are crust type and age, belt geometry/age/polarity, margin classes,
+  boundary systems, and hotspot tracks.
+- **Steady-state derivation on resolution-independent physical grids**,
+  sampled at the requested output resolution: baseline elevation from
+  isostasy + thermal subsidence (seafloor depth tracks crust age —
   ridges, abyssal plains, and gradual margins from one law), orogenic
   relief with anatomy from belt structure, terranes as erodibility
   provinces (the causal route to plateaus, block patchworks, lone
   massifs).
 - **Coupled surface processes**: flow routing, stream-power incision,
   and sediment routing/deposition. River sediment builds shelves, fans,
-  and the quiet abyss — land erosion and bathymetry share one budget,
-  so floating islands are impossible rather than forbidden.
-- **Sea level applied last** (lowstand-then-flood candidate): erode
-  against a lower stand, flood to final level → drowned valleys,
-  estuaries, island fields, shelf-as-drowned-landscape.
+  and the quiet abyss. Land erosion and bathymetry share an auditable
+  budget, so the surrounding bathymetry must respond to island and
+  continental sediment sources rather than ignoring them.
+- **Sea level applied last** using the current lowstand-then-flood
+  baseline: erode against a lower stand, then flood to final level →
+  drowned valleys, estuaries, island fields,
+  shelf-as-drowned-landscape.
 - **Render is separate and cheap**: stepped hypsometric ramp, dense
   stops near sea level; render-class controls never regenerate.
 
@@ -40,19 +46,39 @@ swapped for a deeper simulation without rewriting downstream.*
 
 ## The frame is a window
 
-The simulated world extends beyond the delivered map on all sides.
-Ranges, trenches, and coasts cross the frame without paralleling it
-because they cannot see it. **Nothing in the pipeline may compute a
-function of frame coordinates** (the crop itself excepted).
+The authoritative geography is larger than the delivered map and may be
+finite, periodic, or otherwise boundary-neutral. The delivered frame is
+selected from and extracted out of that geography; it does not
+participate in forming it. The delivered raster itself remains bounded
+and non-wrapping.
 
-Border rule, clarified by the author: the hard requirement is only
-**no land in the outermost ring** — depth is irrelevant there, so a
-flooded shelf may legally run under the frame. Frame-correlation of
-*any* visible structure (including bathymetry) remains a rejected look.
-The guarantee must come from where the causes of land can exist
-(continental nuclei and volcanic sources confined to the world
-interior, tapering at the *world* rim — which lies outside the frame).
-Spike S3 proves or breaks this.
+### Causal border rule (clarified by the author 2026-08-31)
+
+- The hard delivered-output condition is exact and narrow: after all
+  terrain and surface-process stages, every cell in the outermost ring at
+  the final delivered resolution must be water. Depth is irrelevant. No
+  minimum clearance, deep-water target, or wider water collar is implied.
+- Formation, tectonics, elevation, sea level, erosion, deposition, and
+  relief generation must not consume the selected crop mask, crop border,
+  or distance/direction to that border. Extraction may use the origin to
+  address already-defined absolute world-coordinate fields, and a local
+  solve may use it only to schedule a causally sufficient numerical domain;
+  neither may feed a crop-relative value back into geography.
+- Selecting a crop after natural geography exists is allowed, including
+  selection informed by final water. Selection conditions which existing
+  geography is delivered; it must not regenerate, taper, mask, or otherwise
+  alter that geography after the choice.
+- A naturally generated coastline, isobath, range, river, or other feature
+  remains valid if it happens to parallel or turn near the frame. Contour-
+  alignment and frame-correlation instruments remain useful diagnostics,
+  but they are non-gating unless a causal trace shows dependence on the
+  selected crop boundary or on a numerical boundary.
+- Dependence on the finite atlas rim or on a localized solver boundary is
+  still invalid. A crop guard or halo reduces that risk but does not prove
+  independence; periodic or boundary-neutral construction, a sufficient
+  causal reach bound, or nested/shifted-domain invariance must close it.
+  Until then the affected result is unresolved, not rescued by visual
+  plausibility.
 
 ## Working rules
 
@@ -66,9 +92,11 @@ Spike S3 proves or breaks this.
   no natural footing may only be proposed in an explicitly flagged
   request ("this is an unnatural process"), with support, and stays out
   until approved.
-- **Builder never judges alone.** Evaluation harness per the ratified
-  scheme: instrument views (isobaths, slope, transect overlays,
-  spectra), deterministic tripwires that veto but never approve, blind
+- **Builder does not grade its own output.** The builder may orchestrate
+  evaluation and verify cited evidence, but may not serve as the
+  perceptual judge or issue the verdict. The ratified harness uses
+  instrument views (isobaths, slope, transect overlays, spectra),
+  deterministic hard checks and calibrated necessity gates, blind
   canon-discrimination (imposter/2AFC) by fresh-context judges — the
   scalar progress metric — and diagnostic critique panels (author
   format, 2026-08-29): three buckets per image — done poorly / done
@@ -81,9 +109,10 @@ Spike S3 proves or breaks this.
   verdicts persist to disk beside their trial sets. Author verdicts
   accumulate as a calibration library. Review is by batch gallery,
   never a hand-picked single.
-- **Every stage ships a view.** Work that cannot be seen cannot be
-  judged; cause-fields stay renderable so features can be
-  cross-examined against their causes.
+- **Every material stage is auditable.** Every persisted/material field
+  and stage output needed to audit a contract promise has a diagnostic
+  view; transient scratch arrays are exempt. Cause fields stay
+  renderable so features can be cross-examined against their causes.
 - **Determinism discipline**: per-stage RNG keying; no wall clock; no
   unordered iteration feeding results. Controls are staged so a
   downstream slider cannot reshuffle upstream structure (§4).
@@ -96,16 +125,20 @@ Spike S3 proves or breaks this.
 - **Dependencies**: numpy + Pillow (+ Flask via the shared webui).
   Anything heavier is argued case-by-case.
 - **Value ledger**: every feature gets predicted yield at build time,
-  ablation evidence at review, author-decided trims.
+  ablation evidence at review, and author-decided trims in
+  [`VALUE_LEDGER.md`](VALUE_LEDGER.md). Private experimental chronology
+  belongs in [`ATTEMPT_REGISTER.md`](ATTEMPT_REGISTER.md).
 
 ## Aesthetic register
 
-Positive canon: `examples/ref1–14.png` (Gleba screenshots) — emulate
+Positive canon: `../examples/ref1.png` through `../examples/ref14.png`
+(Gleba screenshots) — emulate
 formation qualities feature-by-feature; composition is contract-governed.
 Ignore globe distortion, day/night lighting, land-on-frame.
 
-Rejected on sight (from author-reviewed failures; see CONTRACT §11a
-plus author sessions of 2026-08-29):
+Known rejection signatures (from author-reviewed failures; see CONTRACT
+§11a plus author sessions of 2026-08-29). They trigger a hold and causal
+audit; regularity alone is not proof:
 
 1. Floating islands / bathymetry that ignores land; shoreline plunge
    where no fault lies offshore.
@@ -125,18 +158,27 @@ plus author sessions of 2026-08-29):
 9. Emboss/hillshade aesthetic instead of the stepped hypsometric ramp.
 10. Similar-sized blob landmasses with short disconnected range
     strokes.
-11. Border contouring — any structure (land *or* seafloor) tracing the
-    frame; right-angle corner features.
-12. Obviously geometric features anywhere — arcs, rings, straight
-    lines, even spacing, even widths.
+11. Frame-caused border contouring — land or seafloor altered by an edge
+    fade, mask, forced-water operation, crop-relative modifier, or leaking
+    numerical boundary. Similar geometry produced by frame-blind natural
+    processes is diagnostic evidence, not a rejection by itself.
+12. Systematically repeated or causally unsupported construction
+    geometry — common-radius rings, ruler-straight/even-width bands, or
+    inferred common spacing. Individual naturally caused arcs or
+    straight reaches are audit triggers, not automatic failures.
 
 ## Perf targets and named risks
 
 Contract §15: 256² < 1 s, 512² < 3 s, 1024² < 15 s, 2048² < 90 s;
 re-render in milliseconds.
 
-Risks, tracked openly: erosion-solver cost at 2048²; resolution
-independence of the erosion stage specifically (large valley structure
-must hold across res; the contract permits fine-texture divergence);
-the border guarantee's tail behavior across seeds. Spikes S1–S4 exist
-to de-risk these before architecture commits.
+Current risks, tracked in [`MILESTONES.md`](MILESTONES.md),
+[`VALUE_LEDGER.md`](VALUE_LEDGER.md), and
+[`ATTEMPT_REGISTER.md`](ATTEMPT_REGISTER.md): the 256² fixed-process-grid
+performance miss; resolution independence of coupled surface processes;
+D8 river directionality; distance-dominated shelf halos and aligned bathymetry;
+perimeter belt-wrap; and a natural parent geography that jointly
+supplies the exact water border, accepted land-composition bands, and
+broad two-dimensional continental morphology. Spikes S1–S4 were the
+initial de-risking work; the architecture has since advanced through M3
+and the private border/composition experiments recorded in those files.

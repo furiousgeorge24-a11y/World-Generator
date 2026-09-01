@@ -71,8 +71,10 @@ CONTROLS = [
                  "heterogeneity rides on top)"),
     dict(name="soil_creep", ctype="float", default=1.0,
          lo=0.0, hi=2.0, tier="advanced", invalidates="late",
-         promise="hillslope soil-creep diffusivity; keeps graded "
-                 "slopes curved between channels; 0 turns creep off"),
+         promise="multiplier on the effective hillslope soil-creep "
+                 "diffusivity (1 = calibrated 8.8 km^2/Myr); keeps "
+                 "graded exposed slopes curved between channels; 0 "
+                 "turns creep off"),
     dict(name="lowstand_drop", ctype="float", default=80.0,
          lo=0.0, hi=150.0, tier="advanced", invalidates="late",
          promise="sea-level lowstand (m below present) that rivers cut "
@@ -105,3 +107,9 @@ def make_config(controls):
         lo, hi = c["lo"], c["hi"]
         setattr(cfg, c["name"], min(max(v, lo), hi))
     return cfg
+
+
+def effective_controls(controls=None):
+    """Full, type-normalized, range-clamped control echo for provenance."""
+    cfg = make_config(controls or {})
+    return {c["name"]: getattr(cfg, c["name"]) for c in CONTROLS}

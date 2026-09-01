@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "fixture_id": "recovered-seed11-causal-border-v1",
+  "source_report": {
+    "path": "out/atlas_replay_seed11_065_v2/report.json",
+    "sha256": "9fcb7741f42b5399ead3931c93164ff9dd50f87f2c57c4c448b31bf18d82c12d"
+  },
+  "candidate": {
+    "seed": 11,
+    "origin_xy_km": [
+      13696.0,
+      3200.0
+    ],
+    "structure_spacing_km": 40.02605863192182,
+    "structural_land_fraction": 0.436279296875,
+    "structural_water_clearance_m": 699.10138485833,
+    "rendered_border": {
+      "128": {
+        "edge_band_pixels": 1,
+        "ocean_edge_band_passed": true,
+        "land_fraction": 0.43475341796875
+      },
+      "512": {
+        "edge_band_pixels": 3,
+        "ocean_edge_band_passed": true,
+        "land_fraction": 0.4351348876953125
+      },
+      "1024": {
+        "edge_band_pixels": 5,
+        "ocean_edge_band_passed": true,
+        "land_fraction": 0.43508243560791016
+      }
+    }
+  },
+  "obsolete_contour_diagnostic": {
+    "gating": false,
+    "coarse_parallel_span_km": 1664.0,
+    "visible_contour_gate_passed": false,
+    "max_parallel_span_km": 1081.0343058376836,
+    "violations": [
+      {
+        "edge": "top",
+        "level_m": -5250.0,
+        "span_km": 1081.0343058376836
+      },
+      {
+        "edge": "left",
+        "level_m": -5250.0,
+        "span_km": 852.0
+      }
+    ]
+  },
+  "generation_causality": {
+    "frame_independent_generation": true,
+    "terrain_edited_tapered_or_masked_to_frame": false
+  },
+  "process_domain_independence": {
+    "nested_small_vs_large_passed": false,
+    "shifted_vs_large_passed": false,
+    "render_convergence": {
+      "small_vs_large_512_passed_exact": false,
+      "small_vs_large_1024_passed_exact": false,
+      "shifted_vs_large_512_passed_exact": false,
+      "shifted_vs_large_1024_passed_exact": false
+    }
+  },
+  "expected": {
+    "border_evidence_passed": true,
+    "land_evidence_passed": true,
+    "contour_diagnostic_is_non_gating": true,
+    "frame_independent_generation": true,
+    "process_domain_independent": false,
+    "full_promotion_passed": false
+  }
+}

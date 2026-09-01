@@ -50,30 +50,61 @@ def candidate_png(seed):
                            river_density=cfg.river_density)
 
 
-def bland(im):
-    """True if a crop is unjudgeable: featureless, near-black (night
-    side), or essentially single-surface."""
+def crop_metrics(im):
+    """Return the calibrated S4b crop-quality measurements."""
     g = np.asarray(im.convert("L"), np.float64)
-    if g.mean() < 20:
-        return True
-    if g.std() < 22:
-        return True
     gy, gx = np.gradient(g)
-    if np.hypot(gy, gx).mean() < 1.6:
-        return True
-    return False
+    grad = np.hypot(gy, gx).mean()
+    edge_grad = (np.abs(np.diff(g, axis=0)).mean()
+                 + np.abs(np.diff(g, axis=1)).mean())
+    return {
+        "mean": float(g.mean()),
+        "std": float(g.std()),
+        "gradient": float(grad),
+        "edge_gradient": float(edge_grad),
+        "near_black_fraction": float((g < 12.0).mean()),
+    }
+
+
+def bland(im):
+    """True if a reference crop is not a valid formation stimulus.
+
+    The near-black fraction comes from the repaired S4b yardstick. The
+    standard-deviation threshold is retained. The gradient floor is
+    calibrated below the accepted low-contrast ref10/ref14 crops; the
+    3% near-black ceiling rejects the documented dim ref14 crop while a
+    nearby judgeable ref14 crop remains a known positive. Candidate
+    blandness is never filtered: it is legitimate evidence.
+    """
+    q = crop_metrics(im)
+    return (q["mean"] < 20.0
+            or q["std"] < 22.0
+            or q["gradient"] < 1.2
+            or q["near_black_fraction"] > 0.03)
 
 
 def ref_crop(rng, rid):
     im = Image.open(REFS / f"ref{rid}.png").convert("RGB")
     w, h = im.size
-    for _ in range(40):
+    best = None
+    best_score = -np.inf
+    for _ in range(80):
         x = int(rng.integers(0, w - SIZE + 1))
         y = int(rng.integers(0, h - SIZE + 1))
         c = im.crop((x, y, x + SIZE, y + SIZE))
+        q = crop_metrics(c)
+        score = (q["std"] + 8.0 * q["edge_gradient"]
+                 - 500.0 * max(0.0,
+                               q["near_black_fraction"] - 0.03))
+        if score > best_score:
+            best = (c, (x, y), q)
+            best_score = score
         if not bland(c):
             return c, (x, y)
-    return c, (x, y)
+    _, loc, q = best
+    raise RuntimeError(
+        f"ref{rid} produced no valid {SIZE}px crop after 80 attempts; "
+        f"best at {loc} had metrics {q}")
 
 
 def pair(a, b):

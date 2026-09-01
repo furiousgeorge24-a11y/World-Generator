@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mapgen:pipeline-c:eval:judge-submission:v1",
+  "title": "Pipeline C judge submission envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "submission_id",
+    "bundle_manifest_sha256",
+    "prompt_id",
+    "judge",
+    "created_at_utc",
+    "raw_output",
+    "validated_verdict"
+  ],
+  "properties": {
+    "schema_id": {
+      "const": "urn:mapgen:pipeline-c:eval:judge-submission:v1"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "submission_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "bundle_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "prompt_id": {
+      "enum": [
+        "land_origin_2afc_v1",
+        "land_origin_critique_v1",
+        "land_controls_sweep_v1"
+      ]
+    },
+    "judge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "judge_id",
+        "provider",
+        "model",
+        "fresh_context",
+        "independence_group",
+        "limitations"
+      ],
+      "properties": {
+        "judge_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fresh_context": {
+          "const": true
+        },
+        "independence_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "raw_output": {
+      "$ref": "#/$defs/artifact"
+    },
+    "validated_verdict": {
+      "$ref": "#/$defs/artifact"
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

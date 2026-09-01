@@ -51,23 +51,26 @@ def _draw_rivers(im, m, river_density):
     from PIL import ImageDraw
     thresh = 10.0 ** (3.1 - 2.3 * float(river_density))
     e = m["river_edges"]
-    o = m["frame_origin_km"]
     k = m["km_per_px"]
     size = m["size"]
-    span = size * k
+    if "_frame_window_km" in m:
+        oy, ox, span = m["_frame_window_km"]
+    else:
+        ox = oy = m["frame_origin_km"]
+        span = size * k
     keep = (e["a8"] > thresh) \
-        & (np.minimum(e["x0"], e["x1"]) < o + span + 40.0) \
-        & (np.maximum(e["x0"], e["x1"]) > o - 40.0) \
-        & (np.minimum(e["y0"], e["y1"]) < o + span + 40.0) \
-        & (np.maximum(e["y0"], e["y1"]) > o - 40.0)
+        & (np.minimum(e["x0"], e["x1"]) < ox + span + 40.0) \
+        & (np.maximum(e["x0"], e["x1"]) > ox - 40.0) \
+        & (np.minimum(e["y0"], e["y1"]) < oy + span + 40.0) \
+        & (np.maximum(e["y0"], e["y1"]) > oy - 40.0)
     if not keep.any():
         return im
-    x0 = (e["x0"][keep] - o) / k
-    y0 = (e["y0"][keep] - o) / k
-    x1 = (e["x1"][keep] - o) / k
-    y1 = (e["y1"][keep] - o) / k
-    xd = (e["xd"][keep] - o) / k
-    yd = (e["yd"][keep] - o) / k
+    x0 = (e["x0"][keep] - ox) / k
+    y0 = (e["y0"][keep] - oy) / k
+    x1 = (e["x1"][keep] - ox) / k
+    y1 = (e["y1"][keep] - oy) / k
+    xd = (e["xd"][keep] - ox) / k
+    yd = (e["yd"][keep] - oy) / k
     trunk = e["a8"][keep] > 10.0 * thresh
     # smooth C1 channel: quadratic through donor-midpoint -> cell ->
     # receiver-midpoint (straight cell-to-cell segments drew

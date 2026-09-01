@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mapgen:pipeline-c:eval:candidate-manifest:v1",
+  "title": "Pipeline C land-origin candidate manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "run_id",
+    "pipeline_version",
+    "created_at_utc",
+    "endpoint_policy",
+    "samples"
+  ],
+  "properties": {
+    "schema_id": {
+      "const": "urn:mapgen:pipeline-c:eval:candidate-manifest:v1"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "pipeline_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endpoint_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_min_percent",
+        "request_max_percent",
+        "absolute_tolerance_percentage_points",
+        "zero_acceptance_percent",
+        "seventy_acceptance_percent",
+        "seventy_is_output_ceiling"
+      ],
+      "properties": {
+        "request_min_percent": {
+          "const": 0
+        },
+        "request_max_percent": {
+          "const": 70
+        },
+        "absolute_tolerance_percentage_points": {
+          "const": 10
+        },
+        "zero_acceptance_percent": {
+          "type": "array",
+          "prefixItems": [
+            {"const": 0},
+            {"const": 10}
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "seventy_acceptance_percent": {
+          "type": "array",
+          "prefixItems": [
+            {"const": 60},
+            {"const": 80}
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "seventy_is_output_ceiling": {
+          "const": false
+        }
+      }
+    },
+    "samples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/sample"
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "media_type", "bytes", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["window_id", "origin_x_km", "origin_y_km", "width_km", "height_km"],
+      "properties": {
+        "window_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin_x_km": {
+          "type": "number"
+        },
+        "origin_y_km": {
+          "type": "number"
+        },
+        "width_km": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height_km": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "policy_id", "candidate_count", "trace"],
+      "properties": {
+        "mode": {
+          "enum": ["fixed_window", "crop_last"]
+        },
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidate_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "trace": {
+          "oneOf": [
+            {"$ref": "#/$defs/artifact"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_id",
+        "family_id",
+        "seed",
+        "target_land_percent",
+        "realized_land_percent",
+        "landmass_fragmentation",
+        "width_px",
+        "height_px",
+        "cell_size_km",
+        "latent_randomness_sha256",
+        "other_controls_sha256",
+        "parent_id",
+        "window",
+        "selection",
+        "final_land_mask",
+        "morphology_view",
+        "cause_views"
+      ],
+      "properties": {
+        "sample_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "family_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seed": {
+          "oneOf": [
+            {"type": "integer"},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "target_land_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 70
+        },
+        "realized_land_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "landmass_fragmentation": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.5
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cell_size_km": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "latent_randomness_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "other_controls_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "parent_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "window": {
+          "$ref": "#/$defs/window"
+        },
+        "selection": {
+          "$ref": "#/$defs/selection"
+        },
+        "final_land_mask": {
+          "$ref": "#/$defs/artifact"
+        },
+        "morphology_view": {
+          "$ref": "#/$defs/artifact"
+        },
+        "cause_views": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        }
+      }
+    }
+  }
+}

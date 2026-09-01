@@ -266,29 +266,90 @@ def _seed_nuclei(seed, n, ck, cfg, label, plates):
 
 # ----------------------------------------------------------------- run
 
-def build_structure(seed, cfg=None):
+def build_structure(seed, cfg=None, *, _world_km=None, _coarse_km=None,
+                    _continent_seeder=None, _partitioner=None,
+                    _initial_age_sampler=None, _plate_pivots=None,
+                    _continent_sampler=None, _material_tag_sampler=None):
+    """Build the structural world.
+
+    The underscored arguments are an internal seam for the atlas/replay
+    spike.  Public callers use the original defaults.  An experimental
+    seeder receives ``(seed, n, ck, cfg, label0, plates)`` and replaces
+    only initial continental placement.  An experimental partitioner
+    receives ``(seed, n, ck, cfg)``.  The field-accretion seams are also
+    private: ``_initial_age_sampler(seed, n, ck, cfg)`` returns an ``(n, n)``
+    born-era array addressed to material-cell centres; ``_plate_pivots`` is
+    a ``(cfg.plates, 2)`` array of fixed material-space ``(y, x)`` kilometre
+    coordinates; and ``_continent_sampler(plate_id, material_y_km,
+    material_x_km)`` returns a boolean array with the coordinate arrays'
+    shape.  The continent sampler is evaluated at the exact continuous
+    inverse coordinates, including final sub-cell queries.  Diagnostic-only
+    ``_material_tag_sampler(plate_id, material_y_km, material_x_km)`` may
+    accompany it and must return same-shaped integer tags; tags never enter
+    claim resolution or physics.  With all underscored seams omitted,
+    initialization, claim tuples, continental reads, and kinematics take
+    the exact legacy branches.
+    """
     import time
     cfg = cfg or Config()
     t_all = time.perf_counter()
+    if (_material_tag_sampler is not None
+            and _continent_sampler is None):
+        raise ValueError("experimental material-tag sampler requires the "
+                         "continent sampler")
 
-    world_km = FRAME_KM * (1.0 + 2.0 * cfg.world_margin)
-    n = int(round(world_km / COARSE_KM))
+    default_world = _world_km is None
+    world_km = (FRAME_KM * (1.0 + 2.0 * cfg.world_margin)
+                if default_world else float(_world_km))
+    coarse_km = COARSE_KM if _coarse_km is None else float(_coarse_km)
+    if (coarse_km <= 0.0
+            or (not default_world and world_km <= FRAME_KM)):
+        raise ValueError("experimental world/coarse spacing is invalid")
+    n = int(round(world_km / coarse_km))
     ck = world_km / n
-    f0 = int(round((cfg.world_margin * FRAME_KM) / ck))
+    if default_world:
+        f0 = int(round((cfg.world_margin * FRAME_KM) / ck))
+    else:
+        f0 = int(round((0.5 * (world_km - FRAME_KM)) / ck))
     f1 = n - f0
     xs = (np.arange(n) + 0.5) * ck
     X, Y = np.meshgrid(xs, xs)
 
     # --- initial state
-    label0 = _partition(seed, n, ck, cfg.plates)
+    if _partitioner is None:
+        label0 = _partition(seed, n, ck, cfg.plates)
+    else:
+        label0 = np.asarray(_partitioner(seed, n, ck, cfg), np.int32)
+        if label0.shape != (n, n):
+            raise ValueError("experimental partitioner returned wrong shape")
+        if (label0.min() < 0 or label0.max() >= cfg.plates):
+            raise ValueError("experimental partition labels out of range")
+    if _plate_pivots is None:
+        plate_pivots = None
+    else:
+        plate_pivots = np.asarray(_plate_pivots, dtype=np.float64)
+        if plate_pivots.shape != (cfg.plates, 2):
+            raise ValueError("experimental plate pivots have wrong shape")
+        if not np.isfinite(plate_pivots).all():
+            raise ValueError("experimental plate pivots must be finite")
     plates = [_Plate(n) for _ in range(cfg.plates)]
-    rng_init = stage_rng(seed, "tect-initial-age")
-    ocean_born = -rng_init.integers(0, 8, (n, n)).astype(np.int16)
+    if _initial_age_sampler is None:
+        rng_init = stage_rng(seed, "tect-initial-age")
+        ocean_born = -rng_init.integers(0, 8, (n, n)).astype(np.int16)
+    else:
+        ocean_born = np.asarray(_initial_age_sampler(seed, n, ck, cfg))
+        if ocean_born.shape != (n, n):
+            raise ValueError("experimental initial-age sampler returned "
+                             "wrong shape")
+        ocean_born = ocean_born.astype(np.int16, copy=False)
     for p in range(cfg.plates):
         m = label0 == p
         plates[p].exists = m.copy()
         plates[p].born[m] = ocean_born[m]
-    _seed_nuclei(seed, n, ck, cfg, label0, plates)
+    if _continent_seeder is None:
+        _seed_nuclei(seed, n, ck, cfg, label0, plates)
+    else:
+        _continent_seeder(seed, n, ck, cfg, label0, plates)
     for p in range(cfg.plates):
         plates[p].born[plates[p].cont] = CONT_BORN
 
@@ -302,11 +363,12 @@ def build_structure(seed, cfg=None):
     conv_hist = [np.zeros((n, n), bool) for _ in range(EVENT_MEMORY)]
     div_hist = [np.zeros((n, n), bool) for _ in range(EVENT_MEMORY)]
 
-    def rasterize(Yq=None, Xq=None):
+    def rasterize(Yq=None, Xq=None, include_material_tags=False):
         """Claims for every plate: sample ORIGINAL material through the
         composed inverse transform (never iterated resampling). Query
         points default to cell centres; the final snapshot passes
-        sub-cell offsets (material coordinates are continuous)."""
+        sub-cell offsets (material coordinates are continuous). Diagnostic
+        material tags are evaluated only when explicitly requested."""
         Yq = Y if Yq is None else Yq
         Xq = X if Xq is None else Xq
         claims = []
@@ -318,7 +380,31 @@ def build_structure(seed, cfg=None):
             iyc = iy.clip(0, n - 1)
             ixc = ix.clip(0, n - 1)
             mask = inside & plates[p].exists[iyc, ixc]
-            claims.append((mask, iyc, ixc))
+            if _continent_sampler is None:
+                claims.append((mask, iyc, ixc))
+            else:
+                cont_q = np.asarray(_continent_sampler(p, my, mx))
+                if cont_q.shape != mask.shape:
+                    raise ValueError("experimental continent sampler returned "
+                                     "wrong shape")
+                cont_q = cont_q.astype(bool, copy=False)
+                if _material_tag_sampler is None:
+                    claims.append((mask, iyc, ixc, cont_q))
+                else:
+                    tag_q = None
+                    if include_material_tags:
+                        tag_q = np.asarray(_material_tag_sampler(p, my, mx))
+                        if tag_q.shape != mask.shape:
+                            raise ValueError(
+                                "experimental material-tag sampler returned "
+                                "wrong shape")
+                        if not np.issubdtype(tag_q.dtype, np.integer):
+                            raise ValueError(
+                                "experimental material-tag sampler must "
+                                "return integer tags")
+                        tag_q = tag_q.astype(np.int64, copy=False)
+                    claims.append((mask, iyc, ixc, cont_q,
+                                   tag_q))
         return claims
 
     def resolve(claims, era, mutate):
@@ -332,11 +418,19 @@ def build_structure(seed, cfg=None):
         wmix = np.zeros((n, n), np.int64)
         conv = np.zeros((n, n), bool)
         for p in range(cfg.plates):
-            mask, iy, ix = claims[p]
+            if _continent_sampler is None:
+                mask, iy, ix = claims[p]
+            elif _material_tag_sampler is None:
+                mask, iy, ix, cont_q = claims[p]
+            else:
+                mask, iy, ix, cont_q, _ = claims[p]
             if not mask.any():
                 continue
-            cont_p = np.zeros((n, n), bool)
-            cont_p[mask] = plates[p].cont[iy[mask], ix[mask]]
+            if _continent_sampler is None:
+                cont_p = np.zeros((n, n), bool)
+                cont_p[mask] = plates[p].cont[iy[mask], ix[mask]]
+            else:
+                cont_p = cont_q
             occupied = label_ >= 0
             collide = mask & occupied
             conv |= collide
@@ -380,12 +474,20 @@ def build_structure(seed, cfg=None):
         speed = np.clip(speed + rng_k.normal(0.0, 0.03 * cfg.plate_speed,
                                              cfg.plates),
                         0.2 * cfg.plate_speed, 2.2 * cfg.plate_speed)
-        cents = np.zeros((cfg.plates, 2))
-        for p in range(cfg.plates):
-            m = label == p
-            if m.any():
-                iy, ix = np.nonzero(m)
-                cents[p] = (iy.mean() + 0.5) * ck, (ix.mean() + 0.5) * ck
+        if plate_pivots is None:
+            cents = np.zeros((cfg.plates, 2))
+            for p in range(cfg.plates):
+                m = label == p
+                if m.any():
+                    iy, ix = np.nonzero(m)
+                    cents[p] = (iy.mean() + 0.5) * ck, (ix.mean() + 0.5) * ck
+        else:
+            cents = np.empty((cfg.plates, 2), dtype=np.float64)
+            for p in range(cfg.plates):
+                # The pivot is immutable in material space.  Its current
+                # world position is the rotation centre for this era.
+                cents[p] = (plates[p].T.a @ plate_pivots[p]
+                            + plates[p].T.b)
         for p in range(cfg.plates):
             vel = np.array([speed[p] * np.sin(ang[p]),
                             speed[p] * np.cos(ang[p])])
@@ -432,9 +534,16 @@ def build_structure(seed, cfg=None):
     born_f = np.zeros((n, n))
     belt = np.zeros((n, n), np.float32)
     belt_age_w = np.zeros((n, n))
+    if _material_tag_sampler is not None:
+        material_tag_samples = np.full((4, n, n), -1, np.int64)
+        material_tag_sample_i = 0
     for oy, ox in ((-0.25, -0.25), (-0.25, 0.25),
                    (0.25, -0.25), (0.25, 0.25)):
-        cl = rasterize(Y + oy * ck, X + ox * ck)
+        if _material_tag_sampler is None:
+            cl = rasterize(Y + oy * ck, X + ox * ck)
+        else:
+            cl = rasterize(Y + oy * ck, X + ox * ck,
+                           include_material_tags=True)
         lab_s, _ = resolve(cl, cfg.eras, mutate=False)
         gap_s = lab_s < 0
         cont_s = np.zeros((n, n), bool)
@@ -442,9 +551,21 @@ def build_structure(seed, cfg=None):
         belt_s = np.zeros((n, n), np.float32)
         bage_s = np.full((n, n), -1.0)
         for p in range(cfg.plates):
-            mask, iy, ix = cl[p]
+            if _continent_sampler is None:
+                mask, iy, ix = cl[p]
+            elif _material_tag_sampler is None:
+                mask, iy, ix, cont_q = cl[p]
+            else:
+                mask, iy, ix, cont_q, tag_q = cl[p]
             own = (lab_s == p) & mask
-            cont_s[own] = plates[p].cont[iy[own], ix[own]]
+            if _continent_sampler is None:
+                cont_s[own] = plates[p].cont[iy[own], ix[own]]
+            else:
+                cont_s[own] = cont_q[own]
+                if _material_tag_sampler is not None:
+                    tagged_cont = own & cont_q
+                    material_tag_samples[
+                        material_tag_sample_i, tagged_cont] = tag_q[tagged_cont]
             born_s[own] = plates[p].born[iy[own], ix[own]]
             belt_s[own] = plates[p].belt[iy[own], ix[own]]
             bage_s[own] = plates[p].belt_age[iy[own], ix[own]]
@@ -453,6 +574,8 @@ def build_structure(seed, cfg=None):
         born_f += 0.25 * born_s
         belt += 0.25 * belt_s
         belt_age_w += 0.25 * belt_s * np.maximum(bage_s, 0.0)
+        if _material_tag_sampler is not None:
+            material_tag_sample_i += 1
     cont = cont_frac >= 0.5
     with np.errstate(invalid="ignore"):
         belt_age = np.where(belt > 0, belt_age_w / np.maximum(belt, 1e-9),
@@ -491,6 +614,19 @@ def build_structure(seed, cfg=None):
     active = coast & near_conv
     passive = coast & ~near_conv
     alive = int(len(np.unique(label[label >= 0])))
+
+    if _material_tag_sampler is not None:
+        structure = Structure(
+            n=n, world_km=world_km, frame_slice=(f0, f1),
+            label=label, cont=cont, cont_frac=cont_frac, age_myr=age,
+            belt=belt,
+            belt_age_era=belt_age, conv_recent=conv_recent,
+            div_recent=div_recent, coast=coast, active_margin=active,
+            passive_margin=passive, initial_label=label0,
+            alive_plates=alive, eras=cfg.eras,
+            timings={"structure_s": time.perf_counter() - t_all})
+        structure._material_tag_samples = material_tag_samples
+        return structure
 
     return Structure(
         n=n, world_km=world_km, frame_slice=(f0, f1),

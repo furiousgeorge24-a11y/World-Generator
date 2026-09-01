@@ -5,8 +5,12 @@ Outputs to out/m3/:
 - m3_instruments.png — 3 seeds × (hypsometric, drainage, sediment, isobaths)
 - m3_pairs.png       — same-seed ablations: erosion on/off, soil creep,
                        lowstand, erodibility range
+
+Pass --out to preserve an existing judged bundle in a separate
+directory (Run 1 uses out/m3_run1/).
 """
 
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -25,7 +29,6 @@ from engine.surface import sample_map
 from engine.tectonics import build_structure
 
 OUT = ROOT / "out" / "m3"
-OUT.mkdir(parents=True, exist_ok=True)
 PAD = 8
 FOOT = 16
 
@@ -63,6 +66,18 @@ def sheet(tiles, cols, path, title):
 
 
 def main():
+    global OUT
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--out", default=str(OUT),
+        help="output directory (default: out/m3; use a new directory "
+             "to preserve judged galleries)")
+    args = parser.parse_args()
+    OUT = Path(args.out)
+    if not OUT.is_absolute():
+        OUT = ROOT / OUT
+    OUT.mkdir(parents=True, exist_ok=True)
+
     t0 = time.perf_counter()
     seeds = [3, 7, 11, 19, 23, 31, 40, 51, 63, 77, 88, 101]
 
@@ -73,9 +88,16 @@ def main():
         lakes = int((er["lake_depth"] > 0).sum())
         rd = cfg.river_density
         im = render_map_view(m, "hypsometric", river_density=rd)
+        source_m3 = (float(er["ero"].sum())
+                     * (er["e_km"] * 1000.0) ** 2)
+        dep_frac = (float(er["sed"].sum())
+                    * (er["e_km"] * 1000.0) ** 2
+                    / max(source_m3, 1e-9))
+        export_frac = (er["sediment_export_m3"]
+                       / max(source_m3, 1e-9))
         cap = (f"seed {sd}  land {land:.2f}  peak {m['h'].max():.0f}m"
-               f"  lakes {lakes}c  dep/ero "
-               f"{er['sed'].sum() / max(er['ero'].sum(), 1e-9):.2f}")
+               f"  lakes {lakes}c  dep/export "
+               f"{dep_frac:.2f}/{export_frac:.2f}")
         tiles.append(tile(im, cap))
         print(f"  seed {sd}: land={land:.2f} lakes={lakes}")
     sheet(tiles, 4, OUT / "m3_gallery.png",

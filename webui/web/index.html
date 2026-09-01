@@ -9,7 +9,7 @@
   body { margin: 0; display: flex; height: 100vh; overflow: hidden;
          background: #17181c; color: #d8d9de;
          font: 13px/1.45 system-ui, sans-serif; }
-  #panel { width: 340px; min-width: 340px; overflow-y: auto; padding: 14px;
+  #panel { width: 390px; min-width: 390px; overflow-y: auto; padding: 14px;
            background: #1e2026; border-right: 1px solid #2c2e36; }
   #view { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   #stage { flex: 1; position: relative; overflow: hidden; cursor: grab;
@@ -18,6 +18,16 @@
   #stage.dragging { cursor: grabbing; }
   #map { position: absolute; left: 0; top: 0; transform-origin: 0 0;
          image-rendering: pixelated; user-select: none; -webkit-user-drag: none; }
+  #compare-stage { position: absolute; inset: 0; display: grid;
+                   grid-template-columns: 1fr 1fr; gap: 1px; background: #343741; }
+  .compare-panel { position: relative; min-width: 0; min-height: 0;
+                   display: flex; align-items: center; justify-content: center;
+                   background: #101116; overflow: hidden; }
+  .compare-panel img { max-width: 96%; max-height: 96%; object-fit: contain;
+                       image-rendering: pixelated; }
+  .compare-label { position: absolute; left: 8px; top: 7px; z-index: 1;
+                   padding: 2px 7px; border-radius: 4px;
+                   background: #17181cdd; color: #d8d9de; font-size: 11px; }
   /* promote to its own layer only while dragging: panning a 512px PNG at 80x
      is a compositor move instead of a repaint, but the layer isn't held. */
   #stage.dragging #map { will-change: transform; }
@@ -32,27 +42,96 @@
   .thumb.sel { border-color: #5b7fe0; }
   h1 { font-size: 15px; margin: 0 0 10px; }
   .ver { color: #6f7280; font-weight: normal; }
+  .hidden { display: none !important; }
   .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
-  .row label { flex: 1; }
+  .row label { flex: 1; min-width: 0; }
+  .row select { width: 100%; min-width: 0; max-width: 230px; }
+  #inspection-member-row { display: grid;
+                           grid-template-columns: minmax(0, 1fr) repeat(3, 40px);
+                           align-items: end; }
+  #inspection-member-row label { min-width: 0; }
+  #inspection-member-row select { display: block; width: 100%; max-width: none; }
+  #inspection-member-row button { width: 40px; padding-inline: 0; }
   .ctl { margin: 10px 0 2px; }
   .ctl .name { display: flex; justify-content: space-between; }
   .ctl .name b { font-weight: 600; }
   .ctl .name .val { color: #9fb7ff; font-variant-numeric: tabular-nums; }
   .ctl input[type=range] { width: 100%; }
   .ctl .promise { color: #797c88; font-size: 11px; margin-top: 1px; }
+  .ctl .disabled-reason { color: #d9b84a; font-size: 11px; margin-top: 2px; }
+  .ctl.disabled { opacity: 0.72; }
   .stub b { color: #c9a44a; }
+  .control-kind { margin-left: 6px; padding: 1px 5px; border-radius: 3px;
+                  border: 1px solid #4b4f5b; color: #9ca2b2;
+                  font-size: 9px; font-weight: 650; text-transform: uppercase; }
+  #inspection-control-groups { margin: 10px 0; padding: 9px; border-radius: 5px;
+                  background: #17191f; border: 1px solid #30333d; }
+  .lab-control-group + .lab-control-group { margin-top: 9px; }
+  .lab-control-group h2 { margin: 0 0 4px; color: #c0c4d0;
+                          font-size: 11px; text-transform: uppercase; }
+  .lab-control { margin: 4px 0; padding: 5px 7px; border-left: 3px solid #596274;
+                 background: #1d2028; font-size: 11px; }
+  .lab-control.development { border-left-color: #7c62ca; }
+  .lab-control.render_only { border-left-color: #4ca979; }
+  .lab-control .lab-control-reason { color: #8f95a3; }
+  .lab-control input[type=range] { width: 100%; }
   details { margin-top: 12px; }
   summary { cursor: pointer; color: #a0a3ae; }
   button { background: #3556b8; color: #fff; border: 0; border-radius: 5px;
            padding: 8px 14px; font-size: 13px; cursor: pointer; }
   button:hover { background: #3f63d0; }
   button:disabled { background: #333640; color: #808495; }
-  input[type=number], select { background: #14151a; color: #d8d9de;
+  input[type=number], input[type=text], textarea, select {
+           background: #14151a; color: #d8d9de;
            border: 1px solid #33363f; border-radius: 4px; padding: 4px 6px; }
+  textarea { width: 100%; min-height: 58px; resize: vertical; font: inherit; }
   #seed { width: 90px; }
+  /* The generator row mixes a labelled input, an icon button and a select.
+     The shared `.row label { flex: 1; min-width: 0 }` rule lets the label
+     shrink under its own content, so the fixed-width seed input used to
+     overflow into the dice button. Lay this row out explicitly instead. */
+  #generator-inputs { flex-wrap: wrap; }
+  #generator-inputs label { display: inline-flex; align-items: center;
+                            gap: 6px; flex: 0 1 auto; min-width: 0; }
+  #generator-inputs #seed { flex: 0 0 90px; width: 90px; }
+  #generator-inputs #dice { flex: 0 0 auto; padding: 0 10px; font-size: 15px; }
+  #generator-inputs select { flex: 1 1 110px; max-width: 230px; }
+  /* One shared control height so the row actually lines up. */
+  #generator-inputs input, #generator-inputs select, #generator-inputs button {
+           height: 30px; box-sizing: border-box; }
   #status { margin-top: 8px; color: #8a8d99; min-height: 18px; }
   #status .warn { color: #d9b84a; }
+  #status .fail { color: #ef6b73; font-weight: 600; }
   #stale { color: #d9b84a; display: none; margin-left: 8px; }
+  #lab-banner { padding: 9px 10px; margin: 8px 0 12px; border-radius: 5px;
+                border: 1px solid #b7791f; background: #392b12;
+                color: #ffd983; font-weight: 750; letter-spacing: .025em; }
+  #inspection-status { display: block; margin-top: 3px; color: #e3c99a;
+                       font-size: 11px; font-weight: 500; letter-spacing: 0; }
+  #view-meta { margin-top: 10px; padding: 9px; border-radius: 5px;
+               background: #17191f; border: 1px solid #30333d; }
+  #view-title { font-weight: 650; }
+  #view-caption, #view-purpose, #view-provenance { margin-top: 4px;
+                  color: #9ca0ad; font-size: 11px; overflow-wrap: anywhere; }
+  #view-provenance-box { margin-top: 4px; }
+  #view-provenance-summary { cursor: pointer; color: #9ca0ad; font-size: 11px;
+                  user-select: none; }
+  #view-provenance { white-space: pre-wrap; margin-top: 4px;
+                  max-height: 260px; overflow: auto; }
+  #view-unavailable { margin-top: 6px; color: #efb85d; font-weight: 600; }
+  #legend { display: flex; flex-wrap: wrap; gap: 5px 10px; margin-top: 7px;
+            color: #b4b7c1; font-size: 11px; }
+  .legend-item { display: inline-flex; align-items: center; gap: 4px; }
+  .swatch { display: inline-block; width: 11px; height: 11px;
+            border: 1px solid #777b87; border-radius: 2px; }
+  #promotion { margin-top: 12px; padding: 9px; border-radius: 5px;
+               border: 1px solid #3b3e48; background: #191b21; }
+  #promotion h2 { font-size: 13px; margin: 0 0 7px; }
+  #promotion label { display: block; margin: 6px 0; color: #b8bbc4; }
+  #promoter { width: 100%; }
+  #promotion-confirm { vertical-align: middle; }
+  #promotion-note { color: #d9b84a; font-size: 11px; }
+  #promotion-receipt { max-height: 160px; }
   pre { background: #14151a; padding: 8px; border-radius: 5px; overflow: auto;
         font-size: 11px; max-height: 320px; }
 </style>
@@ -60,28 +139,97 @@
 <body>
 <div id="panel">
   <h1><span id="appname">preview</span> <span class="ver" id="ver"></span></h1>
-  <div class="row">
+  <div class="row hidden" id="mode-row">
+    <label>mode
+      <select id="mode"></select>
+    </label>
+  </div>
+  <div id="lab-banner" class="hidden">
+    <span id="inspection-banner-title">DEVELOPMENT INSPECTION / NOT GENERATOR OUTPUT</span>
+    <span id="inspection-status"></span>
+  </div>
+  <div class="row" id="generator-inputs">
     <label>seed <input type="number" id="seed" value="1"></label>
-    <button id="dice" title="random seed">&#127922;</button>
+    <button id="dice" title="random seed" disabled>&#127922;</button>
     <select id="size">
       <option>128</option><option selected>256</option>
       <option>384</option><option>512</option>
     </select>
   </div>
-  <div class="row">
+  <div class="row hidden" id="inspection-inputs">
+    <label><span id="inspection-case-label">evidence case</span>
+      <select id="case"></select>
+    </label>
+    <button id="inspect" disabled>Load evidence</button>
+  </div>
+  <div class="row hidden" id="inspection-member-row">
+    <label><span id="inspection-member-label">cohort member</span>
+      <select id="member"></select>
+    </label>
+    <button id="member-prev" title="previous frozen member">&#8592;</button>
+    <button id="member-random" title="random frozen member">&#127922;</button>
+    <button id="member-next" title="next frozen member">&#8594;</button>
+  </div>
+  <div class="row" id="generator-view-row">
     <label>view
       <select id="vsel"><option>hypsometric</option></select>
     </label>
-    <button id="gen">Generate</button><span id="stale">&#9888; stale</span>
+    <button id="gen" disabled>Generate</button><span id="stale">&#9888; stale</span>
   </div>
+  <div id="inspection-view-rows" class="hidden">
+    <div class="row">
+      <label>view
+        <select id="iview"></select>
+      </label>
+      <label>evidence
+        <select id="irole"><option value="current">Current</option></select>
+      </label>
+    </div>
+    <div id="view-meta" class="hidden">
+      <div id="view-title"></div>
+      <div id="view-purpose"></div>
+      <div id="view-caption"></div>
+      <details id="view-provenance-box" class="hidden">
+        <summary id="view-provenance-summary">Provenance</summary>
+        <div id="view-provenance"></div>
+      </details>
+      <div id="legend"></div>
+      <div id="view-unavailable"></div>
+    </div>
+  </div>
+  <div id="inspection-control-groups" class="hidden"></div>
   <div id="primary"></div>
   <details><summary>advanced</summary><div id="advanced"></div></details>
   <div id="status"></div>
+  <div id="promotion" class="hidden">
+    <h2>Explicit accepted-baseline promotion</h2>
+    <div id="promotion-note">
+      This action is scoped to the displayed stage evidence. It is not
+      generator acceptance and never runs automatically.
+    </div>
+    <label>author <input type="text" id="promoter" autocomplete="name"></label>
+    <label>review question <textarea id="promotion-question"></textarea></label>
+    <label><input type="checkbox" id="promotion-confirm">
+      <span id="promotion-confirm-label">I explicitly confirm promotion for this review scope.</span>
+    </label>
+    <button id="promote" disabled>Promote accepted baseline</button>
+    <pre id="promotion-receipt" class="hidden"></pre>
+  </div>
   <details><summary>report</summary><pre id="report"></pre></details>
 </div>
 <div id="view">
   <div id="stage">
     <img id="map" alt="generated image">
+    <div id="compare-stage" class="hidden">
+      <div class="compare-panel">
+        <span class="compare-label" id="compare-left-label">Accepted baseline</span>
+        <img id="compare-baseline" alt="accepted baseline inspection evidence">
+      </div>
+      <div class="compare-panel">
+        <span class="compare-label" id="compare-right-label">Current</span>
+        <img id="compare-current" alt="current inspection evidence">
+      </div>
+    </div>
     <div id="zoomlbl"></div>
   </div>
   <div id="hist"></div>
@@ -96,6 +244,9 @@ const values = {};
 const BASE_VIEW = "hypsometric";
 let defaultView = BASE_VIEW;
 const $ = id => document.getElementById(id);
+const controlsByName = new Map();
+let uiMode = "unavailable";
+const inspectionRenderControls = {};
 
 function fmt(v, c) { return c.ctype === "float" ? (+v).toPrecision(4).replace(/\.?0+$/, "") : v; }
 
@@ -104,7 +255,16 @@ function makeControl(c) {
   div.className = "ctl" + (c.temp ? " stub" : "");
   const name = document.createElement("div");
   name.className = "name";
-  name.innerHTML = "<b>" + c.name + "</b><span class='val' id='v_" + c.name + "'></span>";
+  const label = document.createElement("b");
+  label.textContent = c.name;
+  const kind = document.createElement("span");
+  kind.className = "control-kind";
+  kind.textContent = c.control_group || "author";
+  label.appendChild(kind);
+  const valueLabel = document.createElement("span");
+  valueLabel.className = "val";
+  valueLabel.textContent = fmt(c.default, c);
+  name.append(label, valueLabel);
   div.appendChild(name);
   let input;
   if (c.ctype === "bool") {
@@ -120,15 +280,181 @@ function makeControl(c) {
   input.addEventListener("input", () => {
     values[c.name] = c.ctype === "bool" ? input.checked
                    : c.ctype === "int" ? parseInt(input.value) : parseFloat(input.value);
-    $("v_" + c.name).textContent = fmt(values[c.name], c);
-    if (c.invalidates === "render") { schedule(); } else { $("stale").style.display = "inline"; }
+    valueLabel.textContent = fmt(values[c.name], c);
+    if (uiMode !== "generator") return;
+    if (c.invalidates === "render") { schedule(); }
+    else { $("stale").style.display = "inline"; }
   });
   div.appendChild(input);
   const p = document.createElement("div");
   p.className = "promise"; p.textContent = c.promise;
   div.appendChild(p);
+  const disabledReason = document.createElement("div");
+  disabledReason.className = "disabled-reason hidden";
+  div.appendChild(disabledReason);
   values[c.name] = c.default;
+  controlsByName.set(c.name, {meta: c, input, div, disabledReason});
   return div;
+}
+
+function configureInspectionControls(meta) {
+  const host = $("inspection-control-groups");
+  host.replaceChildren();
+  const controls = Array.isArray(meta.inspection_controls)
+    ? meta.inspection_controls : [];
+  for (const groupName of ["development", "render_only"]) {
+    const members = controls.filter(control => control
+      && control.control_group === groupName
+      && typeof control.name === "string");
+    if (!members.length) continue;
+    const group = document.createElement("div");
+    group.className = "lab-control-group";
+    const heading = document.createElement("h2");
+    heading.textContent = groupName === "render_only"
+      ? "Render-only controls" : "Development controls";
+    group.appendChild(heading);
+    for (const control of members) {
+      const item = document.createElement("div");
+      item.className = `lab-control ${groupName}`;
+      item.dataset.evidenceKinds = Array.isArray(control.evidence_kinds)
+        ? control.evidence_kinds.filter(value => typeof value === "string").join(",")
+        : "";
+      const title = document.createElement("div");
+      title.textContent = control.name
+        + (control.causal_entry ? ` · entry ${control.causal_entry}` : " · no stage entry");
+      item.appendChild(title);
+      if (groupName === "render_only" && control.enabled === true
+          && control.ctype === "float") {
+        const value = document.createElement("span");
+        value.textContent = String(control.default);
+        const input = document.createElement("input");
+        input.type = "range";
+        input.min = control.lo;
+        input.max = control.hi;
+        input.step = (control.hi - control.lo) / 100;
+        input.value = control.default;
+        inspectionRenderControls[control.name] = Number(control.default);
+        input.addEventListener("input", () => {
+          inspectionRenderControls[control.name] = Number(input.value);
+          value.textContent = Number(input.value).toFixed(2);
+        });
+        input.addEventListener("change", () => {
+          if (uiMode === "inspection") {
+            loadInspection({preserveSelection: true, preserveReceipt: true});
+          }
+        });
+        item.append(" value ", value, input);
+      } else if (groupName === "render_only" && control.enabled === true
+          && control.ctype === "bool") {
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = control.default === true;
+        inspectionRenderControls[control.name] = input.checked;
+        input.addEventListener("change", () => {
+          inspectionRenderControls[control.name] = input.checked;
+          if (uiMode === "inspection") {
+            loadInspection({preserveSelection: true, preserveReceipt: true});
+          }
+        });
+        item.append(" ", input);
+      }
+      const reason = document.createElement("div");
+      reason.className = "lab-control-reason";
+      reason.textContent = control.reason || "";
+      item.appendChild(reason);
+      group.appendChild(item);
+    }
+    host.appendChild(group);
+  }
+}
+
+function selectedInspectionCaseMeta() {
+  return inspectionCases.find(entry => entry.id === $("case").value) || null;
+}
+
+function inspectionMembers() {
+  const selected = selectedInspectionCaseMeta();
+  return selected && Array.isArray(selected.members)
+    ? selected.members.filter(member => member
+      && typeof member.id === "string" && member.id)
+    : [];
+}
+
+function configureInspectionMembers({preserve = false} = {}) {
+  const members = inspectionMembers();
+  const previous = preserve ? $("member").value : "";
+  $("member").replaceChildren(...members.map(member => {
+    const option = document.createElement("option");
+    option.value = member.id;
+    option.textContent = member.title || member.id;
+    option.title = member.description || "";
+    return option;
+  }));
+  const selectedCase = selectedInspectionCaseMeta();
+  const requested = previous && members.some(member => member.id === previous)
+    ? previous : selectedCase && typeof selectedCase.default_member === "string"
+      ? selectedCase.default_member : members.length ? members[0].id : "";
+  if (members.some(member => member.id === requested)) $("member").value = requested;
+  const visible = members.length > 0;
+  $("inspection-member-row").classList.toggle(
+    "hidden", !visible || uiMode !== "inspection"
+  );
+  $("member").disabled = !visible;
+  for (const id of ["member-prev", "member-random", "member-next"]) {
+    $(id).disabled = members.length < 2;
+  }
+}
+
+function stepInspectionMember(offset) {
+  const members = inspectionMembers();
+  if (!members.length) return;
+  const found = members.findIndex(member => member.id === $("member").value);
+  const currentIndex = found < 0 ? 0 : found;
+  $("member").value = members[
+    (currentIndex + offset + members.length) % members.length
+  ].id;
+  loadInspection();
+}
+
+function randomInspectionMember() {
+  const members = inspectionMembers().filter(member => member.id !== "cohort");
+  if (!members.length) return;
+  const values = new Uint32Array(1);
+  window.crypto.getRandomValues(values);
+  $("member").value = members[values[0] % members.length].id;
+  loadInspection();
+}
+
+function refreshInspectionControlVisibility() {
+  const selected = selectedInspectionCaseMeta();
+  const evidenceKind = selected && typeof selected.evidence_kind === "string"
+    ? selected.evidence_kind : "";
+  for (const item of document.querySelectorAll(".lab-control")) {
+    const kinds = (item.dataset.evidenceKinds || "").split(",").filter(Boolean);
+    item.classList.toggle("hidden", !!kinds.length && !kinds.includes(evidenceKind));
+  }
+  for (const group of document.querySelectorAll(".lab-control-group")) {
+    const visible = [...group.querySelectorAll(".lab-control")]
+      .some(item => !item.classList.contains("hidden"));
+    group.classList.toggle("hidden", !visible);
+  }
+}
+
+function setControlAvailability() {
+  for (const {meta, input, div, disabledReason} of controlsByName.values()) {
+    const enabled = uiMode === "generator" && backendReady
+      && meta.enabled !== false;
+    input.disabled = !enabled;
+    div.classList.toggle("disabled", !enabled);
+    let reason = "";
+    if (!enabled) {
+      reason = meta.disabled_reason || (uiMode === "inspection"
+        ? "Locked in inspection mode; this evidence stage does not consume generator controls."
+        : backendStatus || "This control is currently unavailable.");
+    }
+    disabledReason.textContent = reason;
+    disabledReason.classList.toggle("hidden", !reason);
+  }
 }
 
 /* ---- pan / zoom ---------------------------------------------------- */
@@ -139,6 +465,7 @@ function applyT() {
   $("zoomlbl").textContent = Math.round(scale * 100) + "%";
 }
 function fit() {
+  if (!$("compare-stage").classList.contains("hidden")) return;
   if (!map.naturalWidth) return;
   fitScale = Math.min(stage.clientWidth / map.naturalWidth,
                       stage.clientHeight / map.naturalHeight) * 0.96;
@@ -150,6 +477,7 @@ function fit() {
 map.addEventListener("load", () => { if (!map.dataset.keepview) fit(); delete map.dataset.keepview; });
 stage.addEventListener("wheel", e => {
   e.preventDefault();
+  if (!$("compare-stage").classList.contains("hidden")) return;
   const r = stage.getBoundingClientRect();
   const mx = e.clientX - r.left, my = e.clientY - r.top;
   const f = e.deltaY < 0 ? 1.25 : 0.8;
@@ -178,7 +506,8 @@ function endPan(e) {
 stage.addEventListener("pointerdown", e => {
   // primary button of the primary pointer only: right/middle drags and extra
   // touch points must not hijack (or silently stick) the pan.
-  if (panId !== null || !e.isPrimary || e.button !== 0) return;
+  if (panId !== null || !e.isPrimary || e.button !== 0
+      || !$("compare-stage").classList.contains("hidden")) return;
   panId = e.pointerId;
   panX = e.clientX; panY = e.clientY;
   stage.setPointerCapture(panId);
@@ -242,11 +571,75 @@ function addHist(data, label) {
   showEntry(entry, false);
 }
 
+/* ---- shared response/status helpers -------------------------------- */
+async function readJsonResponse(res, fallback) {
+  const raw = await res.text();
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch (_) {}
+  if (!res.ok) {
+    const detail = data && (data.error || data.status || data.message);
+    throw new Error(detail || `${fallback} (HTTP ${res.status})`);
+  }
+  if (!data || typeof data !== "object") {
+    throw new Error(`${fallback}: server returned non-JSON content`);
+  }
+  return data;
+}
+
+function showResultStatus(elapsed, report, suffix = "") {
+  const findings = report && Array.isArray(report.findings) ? report.findings : [];
+  const fails = findings.filter(f => f && f.level === "fail").length;
+  const warns = findings.filter(f => f && f.level === "warn").length;
+  const parts = [document.createTextNode(`${elapsed ?? "?"}s${suffix}`)];
+  if (fails) {
+    const span = document.createElement("span");
+    span.className = "fail";
+    span.textContent = ` ⛔ ${fails} failure(s)`;
+    parts.push(span);
+  }
+  if (warns) {
+    const span = document.createElement("span");
+    span.className = "warn";
+    span.textContent = ` ⚠ ${warns} warning(s)`;
+    parts.push(span);
+  }
+  $("status").replaceChildren(...parts);
+}
+
+function configureSizes(meta) {
+  const offered = Array.isArray(meta.supported_sizes)
+    ? [...new Set(meta.supported_sizes.filter(
+        v => Number.isInteger(v) && v > 0))]
+    : [];
+  const requestedDefault = Number.isInteger(meta.default_size) && meta.default_size > 0
+    ? meta.default_size : null;
+  if (!offered.length && requestedDefault === null) return;
+  if (!offered.length) {
+    for (const option of $("size").options) offered.push(+option.value);
+  }
+  if (requestedDefault !== null && !offered.includes(requestedDefault)) {
+    offered.push(requestedDefault);
+  }
+  offered.sort((a, b) => a - b);
+  $("size").replaceChildren(...offered.map(value => {
+    const option = document.createElement("option");
+    option.value = option.textContent = String(value);
+    option.selected = value === (requestedDefault ?? offered[0]);
+    return option;
+  }));
+}
+
 /* ---- generation ----------------------------------------------------- */
 let timer = null, busy = false, queued = false;
+let backendReady = false, backendStatus = "loading generator…";
 function schedule() { clearTimeout(timer); timer = setTimeout(go, 120); }
 
 async function go() {
+  if (uiMode !== "generator" || !backendReady) {
+    $("gen").disabled = true;
+    if (uiMode === "generator") $("status").textContent = backendStatus;
+    return;
+  }
   if (busy) { queued = true; return; }
   busy = true; $("gen").disabled = true;
   $("status").textContent = "generating…";
@@ -256,51 +649,783 @@ async function go() {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ seed, size, view: $("vsel").value, controls: values })
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, "generation failed");
+    const views = Array.isArray(data.views) ? data.views : [];
     const vsel = $("vsel");
-    if (data.views && data.views.length) {
-      defaultView = data.views.includes(BASE_VIEW) ? BASE_VIEW : data.views[0];
+    if (views.length) {
+      defaultView = views.includes(BASE_VIEW) ? BASE_VIEW : views[0];
     }
-    if (data.views && [...vsel.options].map(o => o.value).join() !== data.views.join()) {
+    if (views.length && [...vsel.options].map(o => o.value).join() !== views.join()) {
       const cur = vsel.value;
-      vsel.innerHTML = "";
-      for (const v of data.views) {
-        const o = document.createElement("option");
-        o.value = o.textContent = v;
-        vsel.appendChild(o);
-      }
-      vsel.value = data.views.includes(cur) ? cur : defaultView;
+      vsel.replaceChildren(...views.map(v => {
+        const option = document.createElement("option");
+        option.value = option.textContent = v;
+        return option;
+      }));
+      vsel.value = views.includes(cur) ? cur : defaultView;
     }
     addHist(data, `s${seed} ${size}²`);
-    const warns = (data.report.findings || []).filter(f => f.level === "warn");
-    $("status").innerHTML = data.elapsed_s + "s" + (data.cached ? " (cached sim)" : "")
-      + (warns.length ? " <span class='warn'>&#9888; " + warns.length + " finding(s)</span>" : "");
+    showResultStatus(data.elapsed_s, data.report,
+      data.cached ? " (cached sim)" : "");
     $("stale").style.display = "none";
   } catch (err) {
     $("status").textContent = "error: " + err;
   }
-  busy = false; $("gen").disabled = false;
-  if (queued) { queued = false; go(); }
+  busy = false;
+  $("gen").disabled = uiMode !== "generator" || !backendReady;
+  if (queued && uiMode === "generator") { queued = false; go(); }
+  else queued = false;
+}
+
+/* ---- inspection laboratory ---------------------------------------- */
+const ROLE_LABELS = {
+  current: "Current",
+  baseline: "Accepted baseline",
+  delta: "Delta from accepted baseline",
+  revision_reference: "Revision reference",
+  revision_delta: "Revision delta"
+};
+const DEFAULT_ROLE_ORDER = ["current", "baseline", "delta"];
+let inspectReady = false;
+let inspectionStatus = "Inspection is unavailable.";
+let inspectionBanner = "DEVELOPMENT INSPECTION / NOT GENERATOR OUTPUT";
+let inspectionCases = [];
+let inspectionPacket = null;
+let inspectionViews = [];
+let inspectionImageUrl = null;
+let inspectionCompareUrls = [];
+let inspectRequestToken = 0;
+let renderRequestToken = 0;
+let promotionAllowed = false;
+
+function viewId(view) {
+  return view && typeof view.id === "string" ? view.id
+       : view && typeof view.view_id === "string" ? view.view_id : "";
+}
+
+function roleSemanticField(view, role, field) {
+  const roles = view && view.roles;
+  const raw = roles && !Array.isArray(roles) && typeof roles === "object"
+    ? roles[role] : null;
+  if (raw && typeof raw === "object"
+      && Object.prototype.hasOwnProperty.call(raw, field)) return raw[field];
+  const mapNames = {
+    legend: "legend_by_role",
+    source_fields: "source_fields_by_role",
+    units: "units_by_role"
+  };
+  const mapName = mapNames[field];
+  const mapped = mapName && view && view[mapName];
+  if (mapped && typeof mapped === "object"
+      && Object.prototype.hasOwnProperty.call(mapped, role)) return mapped[role];
+  return view && Object.prototype.hasOwnProperty.call(view, field)
+    ? view[field] : null;
+}
+
+function decorateRoleInfo(view, role, info) {
+  return {
+    ...info,
+    caption: roleSemanticField(view, role, "caption"),
+    legend: roleSemanticField(view, role, "legend"),
+    source_fields: roleSemanticField(view, role, "source_fields"),
+    subject: roleSemanticField(view, role, "subject"),
+    title: roleSemanticField(view, role, "title"),
+    units: roleSemanticField(view, role, "units")
+  };
+}
+
+function roleInfo(view, role) {
+  const roles = view && view.roles;
+  if (roles && !Array.isArray(roles) && typeof roles === "object") {
+    const raw = roles[role];
+    if (typeof raw === "boolean") return decorateRoleInfo(view, role, {
+      available: raw, reason: "", label: roleLabel(view, role), fallback_roles: []
+    });
+    if (raw && typeof raw === "object") {
+      return decorateRoleInfo(view, role, {
+        available: raw.available === true,
+        reason: typeof raw.reason === "string" ? raw.reason : "",
+        label: typeof raw.label === "string" && raw.label.trim()
+          ? raw.label : roleLabel(view, role),
+        fallback_roles: Array.isArray(raw.fallback_roles)
+          ? raw.fallback_roles.filter(value => typeof value === "string" && value)
+          : []
+      });
+    }
+  }
+  const listed = Array.isArray(roles) ? roles
+               : Array.isArray(view && view.available_roles) ? view.available_roles
+               : null;
+  if (listed) {
+    const available = listed.includes(role);
+    const reasons = view.unavailable_roles || view.unavailable || {};
+    return decorateRoleInfo(view, role, {
+      available,
+      reason: available ? "" : (reasons[role] || "Unavailable."),
+      label: roleLabel(view, role),
+      fallback_roles: []
+    });
+  }
+  const direct = view && view[`${role}_available`];
+  if (typeof direct === "boolean") {
+    return decorateRoleInfo(view, role, {
+      available: direct,
+      reason: view[`${role}_reason`] || "",
+      label: roleLabel(view, role),
+      fallback_roles: []
+    });
+  }
+  return role === "current"
+    ? decorateRoleInfo(view, role, {
+        available: true, reason: "", label: roleLabel(view, role), fallback_roles: []
+      })
+    : decorateRoleInfo(view, role, {
+        available: false,
+        reason: `No ${roleLabel(view, role).toLowerCase()} is available.`,
+        label: roleLabel(view, role),
+        fallback_roles: []
+      });
+}
+
+function roleLabel(view, role) {
+  const roles = view && view.roles;
+  const raw = roles && !Array.isArray(roles) && typeof roles === "object"
+    ? roles[role] : null;
+  if (raw && typeof raw === "object"
+      && typeof raw.label === "string" && raw.label.trim()) return raw.label;
+  const declared = view && view.role_labels;
+  if (declared && typeof declared === "object"
+      && typeof declared[role] === "string" && declared[role].trim()) {
+    return declared[role];
+  }
+  return ROLE_LABELS[role] || role.replaceAll("_", " ");
+}
+
+function inspectionRoleOrder(view) {
+  if (view && Array.isArray(view.role_order)) {
+    const unique = [...new Set(view.role_order.filter(
+      value => typeof value === "string" && value
+    ))];
+    if (unique.length) return unique;
+  }
+  const roles = view && view.roles;
+  if (roles && !Array.isArray(roles) && typeof roles === "object") {
+    const declared = Object.keys(roles);
+    const ordered = [
+      ...["current", "revision_reference", "revision_delta", "baseline", "delta"]
+        .filter(role => declared.includes(role)),
+      ...declared.filter(role => ![
+        "current", "revision_reference", "revision_delta", "baseline", "delta"
+      ].includes(role))
+    ];
+    if (ordered.length) return ordered;
+  }
+  return DEFAULT_ROLE_ORDER;
+}
+
+function configureInspectionRoles(view, preferredRole = "") {
+  const order = inspectionRoleOrder(view);
+  const report = inspectionPacket && inspectionPacket.report;
+  const reportDefault = report && typeof report.default_role_id === "string"
+    ? report.default_role_id : "";
+  const selected = order.includes(preferredRole) ? preferredRole
+    : order.includes(reportDefault) ? reportDefault
+    : order.includes("current") ? "current" : order[0];
+  $("irole").replaceChildren(...order.map(role => {
+    const info = roleInfo(view, role);
+    const option = document.createElement("option");
+    option.value = role;
+    option.dataset.available = String(info.available);
+    option.textContent = info.label + (info.available ? "" : " — unavailable");
+    return option;
+  }));
+  if (selected) $("irole").value = selected;
+}
+
+function selectedInspectionView() {
+  return inspectionViews.find(view => viewId(view) === $("iview").value) || null;
+}
+
+function promotionChainHeadSha256(report) {
+  if (!report || typeof report !== "object") return null;
+  if (typeof report.promotion_chain_head_sha256 === "string") {
+    return report.promotion_chain_head_sha256;
+  }
+  if (typeof report.expected_previous === "string") {
+    return report.expected_previous;
+  }
+  return null;
+}
+
+function clearInspectionImage() {
+  renderRequestToken += 1;
+  if (inspectionImageUrl) URL.revokeObjectURL(inspectionImageUrl);
+  for (const url of inspectionCompareUrls) URL.revokeObjectURL(url);
+  inspectionImageUrl = null;
+  inspectionCompareUrls = [];
+  map.removeAttribute("src");
+  map.classList.remove("hidden");
+  $("compare-baseline").removeAttribute("src");
+  $("compare-current").removeAttribute("src");
+  $("compare-stage").classList.add("hidden");
+  delete map.dataset.keepview;
+  $("zoomlbl").textContent = "";
+}
+
+function renderLegend(entries) {
+  const legend = $("legend");
+  legend.replaceChildren();
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (!entry || typeof entry !== "object") continue;
+    const item = document.createElement("span");
+    item.className = "legend-item";
+    if (typeof entry.color === "string" && CSS.supports("color", entry.color)) {
+      const swatch = document.createElement("span");
+      swatch.className = "swatch";
+      swatch.style.backgroundColor = entry.color;
+      item.appendChild(swatch);
+    }
+    const label = document.createElement("span");
+    label.textContent = String(entry.label ?? entry.value ?? "");
+    item.appendChild(label);
+    legend.appendChild(item);
+  }
+}
+
+function renderFallbackSemantics(view, roles, reason) {
+  const subjects = roles.map(role => ({role, ...roleInfo(view, role)}));
+  const legend = [];
+  for (const subject of subjects) {
+    for (const entry of Array.isArray(subject.legend) ? subject.legend : []) {
+      if (!entry || typeof entry !== "object") continue;
+      legend.push({
+        ...entry,
+        label: `${subject.label}: ${String(entry.label ?? entry.value ?? "")}`
+      });
+    }
+  }
+  renderLegend(legend);
+  const captions = subjects
+    .map(subject => typeof subject.caption === "string" ? subject.caption : "")
+    .filter(Boolean);
+  const caption = [reason, ...captions].filter(Boolean).join(" | ");
+  $("view-caption").textContent = caption;
+  $("view-caption").classList.toggle("hidden", !caption);
+  const provenance = {
+    comparison_fallback: true,
+    reason: reason || "Semantic delta unavailable.",
+    roles: subjects.map(subject => ({
+      role: subject.role,
+      label: subject.label,
+      source_fields: subject.source_fields,
+      subject: subject.subject,
+      units: subject.units
+    })),
+    packet: view.provenance || null
+  };
+  setProvenance(JSON.stringify(provenance, null, 2));
+}
+
+function setProvenance(text) {
+  const box = $("view-provenance-box");
+  const body = $("view-provenance");
+  const value = typeof text === "string" ? text : "";
+  body.textContent = value;
+  box.classList.toggle("hidden", !value);
+  if (!value) box.open = false;
+}
+
+function updateInspectionViewMeta() {
+  const view = selectedInspectionView();
+  $("view-meta").classList.toggle("hidden", !view);
+  if (!view) return;
+  configureInspectionRoles(view, $("irole").value);
+  const selectedRole = $("irole").value;
+  const selected = roleInfo(view, selectedRole);
+  const title = selected.title || view.title || viewId(view);
+  const stageName = selected.subject && selected.subject.stage_id
+    ? selected.subject.stage_id : view.stage || view.required_stage;
+  $("view-title").textContent = stageName ? `${title} · ${stageName}` : title;
+  $("view-purpose").textContent = view.purpose || "";
+  $("view-purpose").classList.toggle("hidden", !view.purpose);
+  const caption = selected.caption || view.caption || view.provenance_caption || "";
+  $("view-caption").textContent = caption;
+  $("view-caption").classList.toggle("hidden", !caption);
+  let provenance = view.provenance;
+  if (!provenance) {
+    const fields = [
+      "version", "required_schema_versions", "source_fields", "units",
+      "comparison_type", "alignment", "renderer_version", "palette_version"
+    ];
+    provenance = Object.fromEntries(fields
+      .filter(field => view[field] !== undefined)
+      .map(field => [field, view[field]]));
+    if (!Object.keys(provenance).length) provenance = null;
+  }
+  provenance = provenance && typeof provenance === "object"
+    ? {...provenance} : {};
+  provenance.selected_role = selectedRole;
+  if (selected.subject && typeof selected.subject === "object") {
+    provenance.selected_subject = selected.subject;
+  }
+  if (Array.isArray(selected.source_fields)) {
+    provenance.selected_source_fields = selected.source_fields;
+  }
+  if (selected.units !== null && selected.units !== undefined) {
+    provenance.selected_units = selected.units;
+  }
+  if (provenance && typeof provenance === "object") {
+    provenance = JSON.stringify(provenance, null, 2);
+  }
+  setProvenance(provenance);
+  renderLegend(selected.legend);
+
+  $("view-unavailable").textContent = selected.available ? ""
+    : selected.reason || "This evidence role is unavailable.";
+  $("view-unavailable").classList.toggle("hidden", selected.available);
+}
+
+function configurePromotion(report) {
+  promotionAllowed = !!inspectionPacket && (!report || report.can_promote !== false);
+  $("promotion").classList.toggle("hidden", !inspectionPacket);
+  const question = report && (report.review_question || report.author_question);
+  const hasDeclaredQuestion = typeof question === "string" && !!question.trim();
+  $("promotion-question").value = hasDeclaredQuestion ? question : "";
+  $("promotion-question").readOnly = hasDeclaredQuestion;
+  $("promotion-question").title = hasDeclaredQuestion
+    ? "The packet's predeclared review question is immutable."
+    : "Enter the review question required by this adapter.";
+  const blockedReason = report && (report.promotion_unavailable_reason
+    || report.promotion_blocked_reason);
+  const scope = report && report.promotion_scope;
+  const scopeText = scope && typeof scope === "object"
+    ? ` Scope: stage=${scope.stage_id}; family=${scope.comparison_family_id}; evidence=${scope.evidence_kind}.`
+    : "";
+  $("promotion-note").textContent = (blockedReason ||
+    "This action is scoped to the displayed stage evidence. It is not generator acceptance and never runs automatically.")
+    + scopeText;
+  const evidenceKind = report && typeof report.evidence_kind === "string"
+    ? report.evidence_kind : "inspection evidence";
+  $("promotion-confirm-label").textContent =
+    `I explicitly confirm promotion for this ${evidenceKind} review scope.`;
+  updatePromotionButton();
+}
+
+function updatePromotionButton() {
+  $("promote").disabled = !promotionAllowed
+    || !$("promotion-confirm").checked
+    || !$("promoter").value.trim()
+    || !$("promotion-question").value.trim();
+}
+
+async function fetchInspectionPng(view, role) {
+  const res = await fetch("/api/inspect/render", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      packet_id: inspectionPacket.packet_id,
+      view_id: viewId(view),
+      role
+    })
+  });
+  if (!res.ok) {
+    await readJsonResponse(res, "inspection render failed");
+    throw new Error("inspection render failed");
+  }
+  const contentType = (res.headers.get("Content-Type") || "").toLowerCase();
+  if (!contentType.startsWith("image/png")) {
+    throw new Error("inspection render did not return image/png");
+  }
+  return {
+    blob: await res.blob(),
+    sha256: res.headers.get("X-Content-SHA256") || ""
+  };
+}
+
+async function renderFallbackSideBySide(view, roles, reason) {
+  if (!Array.isArray(roles) || roles.length !== 2) {
+    throw new Error("comparison fallback must declare exactly two roles");
+  }
+  const token = ++renderRequestToken;
+  const labels = roles.map(role => roleInfo(view, role).label);
+  $("status").textContent = `loading ${labels[0]} / ${labels[1]} evidence…`;
+  try {
+    const [leftResult, rightResult] = await Promise.all([
+      fetchInspectionPng(view, roles[0]),
+      fetchInspectionPng(view, roles[1])
+    ]);
+    if (token !== renderRequestToken || uiMode !== "inspection") return;
+    if (inspectionImageUrl) URL.revokeObjectURL(inspectionImageUrl);
+    for (const url of inspectionCompareUrls) URL.revokeObjectURL(url);
+    inspectionImageUrl = null;
+    inspectionCompareUrls = [
+      URL.createObjectURL(leftResult.blob),
+      URL.createObjectURL(rightResult.blob)
+    ];
+    map.removeAttribute("src");
+    map.classList.add("hidden");
+    $("compare-baseline").src = inspectionCompareUrls[0];
+    $("compare-current").src = inspectionCompareUrls[1];
+    $("compare-left-label").textContent = labels[0];
+    $("compare-right-label").textContent = labels[1];
+    $("compare-baseline").alt = `${labels[0]} inspection evidence`;
+    $("compare-current").alt = `${labels[1]} inspection evidence`;
+    $("compare-stage").classList.remove("hidden");
+    $("zoomlbl").textContent = "side by side";
+    renderFallbackSemantics(view, roles, reason);
+    $("status").textContent = (reason ||
+      "Semantic delta unavailable; the declared comparison subjects are shown side by side.")
+      + (leftResult.sha256 && rightResult.sha256
+        ? ` PNG SHA-256: ${labels[0]} ${leftResult.sha256}; ${labels[1]} ${rightResult.sha256}.`
+        : "");
+  } catch (err) {
+    if (token === renderRequestToken) {
+      clearInspectionImage();
+      $("status").textContent = "error: " + err;
+    }
+  }
+}
+
+async function renderInspection(keepView = true) {
+  if (uiMode !== "inspection" || !inspectionPacket) return;
+  const view = selectedInspectionView();
+  updateInspectionViewMeta();
+  const role = $("irole").value;
+  if (!view) {
+    clearInspectionImage();
+    $("status").textContent = "No inspection view is registered for this evidence case.";
+    return;
+  }
+  const availability = roleInfo(view, role);
+  if (!availability.available) {
+    $("view-unavailable").textContent = availability.reason || "This evidence role is unavailable.";
+    $("view-unavailable").classList.remove("hidden");
+    const fallbacks = availability.fallback_roles.length === 2
+      ? availability.fallback_roles
+      : role === "delta" ? ["baseline", "current"] : [];
+    if (fallbacks.length === 2
+        && fallbacks.every(candidate => roleInfo(view, candidate).available)) {
+      await renderFallbackSideBySide(view, fallbacks, availability.reason);
+    } else {
+      clearInspectionImage();
+      $("status").textContent = availability.reason || "Evidence unavailable.";
+    }
+    return;
+  }
+
+  const token = ++renderRequestToken;
+  $("status").textContent = `rendering ${availability.label.toLowerCase()}…`;
+  try {
+    const rendered = await fetchInspectionPng(view, role);
+    if (token !== renderRequestToken || uiMode !== "inspection") return;
+    if (inspectionImageUrl) URL.revokeObjectURL(inspectionImageUrl);
+    for (const url of inspectionCompareUrls) URL.revokeObjectURL(url);
+    inspectionImageUrl = URL.createObjectURL(rendered.blob);
+    inspectionCompareUrls = [];
+    $("compare-baseline").removeAttribute("src");
+    $("compare-current").removeAttribute("src");
+    $("compare-stage").classList.add("hidden");
+    map.classList.remove("hidden");
+    if (keepView) map.dataset.keepview = "1";
+    const evidenceKind = inspectionPacket.report
+      && typeof inspectionPacket.report.evidence_kind === "string"
+      ? inspectionPacket.report.evidence_kind : "inspection evidence";
+    map.alt = `${view.title || viewId(view)} — ${availability.label} ${evidenceKind}`;
+    map.src = inspectionImageUrl;
+    $("status").textContent = `${availability.label} inspection evidence loaded.`
+      + (rendered.sha256 ? ` PNG SHA-256: ${rendered.sha256}.` : "");
+  } catch (err) {
+    if (token === renderRequestToken) {
+      clearInspectionImage();
+      $("status").textContent = "error: " + err;
+    }
+  }
+}
+
+async function loadInspection({preserveSelection = false, preserveReceipt = false} = {}) {
+  if (uiMode !== "inspection" || !inspectReady) {
+    $("inspect").disabled = true;
+    if (uiMode === "inspection") $("status").textContent = inspectionStatus;
+    return;
+  }
+  const caseId = $("case").value;
+  if (!caseId) {
+    $("status").textContent = "No inspection evidence case is registered.";
+    return;
+  }
+  $("inspect").disabled = true;
+  if (!preserveReceipt) {
+    $("promotion-receipt").textContent = "";
+    $("promotion-receipt").classList.add("hidden");
+  }
+  const token = ++inspectRequestToken;
+  const previousView = preserveSelection ? $("iview").value : "";
+  const previousRole = preserveSelection ? $("irole").value : "current";
+  inspectionPacket = null;
+  promotionAllowed = false;
+  $("iview").disabled = true;
+  $("irole").disabled = true;
+  $("promotion").classList.add("hidden");
+  clearInspectionImage();
+  $("status").textContent = "loading inspection evidence…";
+  try {
+    const inspectBody = {case_id: caseId};
+    const caseMeta = selectedInspectionCaseMeta();
+    const allowedRenderControls = caseMeta && Array.isArray(caseMeta.render_controls)
+      ? new Set(caseMeta.render_controls) : null;
+    const activeRenderControls = Object.fromEntries(
+      Object.entries(inspectionRenderControls).filter(([name]) =>
+        allowedRenderControls === null || allowedRenderControls.has(name))
+    );
+    if (Object.keys(activeRenderControls).length) {
+      inspectBody.render_controls = activeRenderControls;
+    }
+    const members = inspectionMembers();
+    if (members.length && $("member").value) {
+      inspectBody.selection = {member_id: $("member").value};
+    }
+    const res = await fetch("/api/inspect", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(inspectBody)
+    });
+    const data = await readJsonResponse(res, "inspection failed");
+    if (token !== inspectRequestToken || uiMode !== "inspection") return;
+    if (typeof data.packet_id !== "string" || !data.packet_id) {
+      throw new Error("inspection response has no packet_id");
+    }
+    if (!Array.isArray(data.views)) {
+      throw new Error("inspection response has no structured views array");
+    }
+    inspectionPacket = data;
+    inspectionViews = data.views.filter(view => viewId(view));
+    $("iview").replaceChildren(...inspectionViews.map(view => {
+      const option = document.createElement("option");
+      option.value = viewId(view);
+      option.textContent = view.title || viewId(view);
+      return option;
+    }));
+    const defaultInspectionView = data.report
+      && typeof data.report.default_view_id === "string"
+      ? data.report.default_view_id : "";
+    if (previousView && inspectionViews.some(view => viewId(view) === previousView)) {
+      $("iview").value = previousView;
+    } else if (defaultInspectionView
+        && inspectionViews.some(view => viewId(view) === defaultInspectionView)) {
+      $("iview").value = defaultInspectionView;
+    }
+    configureInspectionRoles(selectedInspectionView(), previousRole);
+    $("report").textContent = JSON.stringify(data.report || {}, null, 2);
+    const packetLabel = data.report && typeof data.report.display_label === "string"
+      && data.report.display_label.trim() ? data.report.display_label : inspectionBanner;
+    $("inspection-banner-title").textContent = packetLabel;
+    updateInspectionViewMeta();
+    configurePromotion(data.report || {});
+    showResultStatus(data.elapsed_s, data.report, " (inspection packet)");
+    await renderInspection(false);
+  } catch (err) {
+    if (token === inspectRequestToken) {
+      inspectionPacket = null;
+      inspectionViews = [];
+      clearInspectionImage();
+      $("iview").replaceChildren();
+      $("view-meta").classList.add("hidden");
+      $("promotion").classList.add("hidden");
+      $("status").textContent = "error: " + err;
+    }
+  } finally {
+    if (token === inspectRequestToken) {
+      $("iview").disabled = !inspectionPacket || !inspectionViews.length;
+      $("irole").disabled = !inspectionPacket || !inspectionViews.length;
+      $("inspect").disabled = uiMode !== "inspection" || !inspectReady
+        || !$("case").value;
+    }
+  }
+}
+
+async function promoteInspectionBaseline() {
+  if (!inspectionPacket || !promotionAllowed) return;
+  const author = $("promoter").value.trim();
+  const question = $("promotion-question").value.trim();
+  if (!$("promotion-confirm").checked || !author || !question) return;
+  if (!window.confirm(
+    "Promote this packet as the accepted baseline for its explicitly displayed stage and comparison family?\n\nThis is not generator acceptance."
+  )) return;
+
+  const body = {
+    packet_id: inspectionPacket.packet_id,
+    author,
+    question,
+    confirm: true
+  };
+  const previous = promotionChainHeadSha256(inspectionPacket.report);
+  if (previous) body.expected_previous = previous;
+  $("promote").disabled = true;
+  $("status").textContent = "recording explicit baseline promotion…";
+  try {
+    const res = await fetch("/api/inspect/promote", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body)
+    });
+    const receipt = await readJsonResponse(res, "baseline promotion failed");
+    $("promotion-receipt").textContent = JSON.stringify(receipt, null, 2);
+    $("promotion-receipt").classList.remove("hidden");
+    $("promotion-confirm").checked = false;
+    $("status").textContent = "Accepted-baseline promotion recorded; receipt retained below.";
+    await loadInspection({preserveSelection: true, preserveReceipt: true});
+  } catch (err) {
+    $("status").textContent = "error: " + err;
+  } finally {
+    updatePromotionButton();
+  }
+}
+
+/* ---- capability mode ------------------------------------------------ */
+function setMode(mode, {run = true} = {}) {
+  clearTimeout(timer);
+  uiMode = mode;
+  const inspection = mode === "inspection";
+  const generator = mode === "generator";
+  $("lab-banner").classList.toggle("hidden", !inspection);
+  $("generator-inputs").classList.toggle("hidden", !generator);
+  $("generator-view-row").classList.toggle("hidden", !generator);
+  $("inspection-inputs").classList.toggle("hidden", !inspection);
+  $("inspection-member-row").classList.toggle(
+    "hidden", !inspection || !inspectionMembers().length
+  );
+  $("inspection-view-rows").classList.toggle("hidden", !inspection);
+  $("inspection-control-groups").classList.toggle("hidden", !inspection);
+  $("hist").classList.toggle("hidden", !generator);
+  if (!inspection) $("promotion").classList.add("hidden");
+  setControlAvailability();
+  $("gen").disabled = !generator || !backendReady;
+  $("dice").disabled = !generator || !backendReady;
+  $("inspect").disabled = !inspection || !inspectReady || !$("case").value;
+
+  if (inspection) {
+    current = null;
+    clearInspectionImage();
+    map.alt = "development inspection evidence";
+    $("inspection-banner-title").textContent = inspectionBanner;
+    if (run) loadInspection();
+  } else if (generator) {
+    clearInspectionImage();
+    if (current) showEntry(current, false);
+    else if (run) go();
+  } else {
+    clearInspectionImage();
+    $("status").textContent = backendStatus;
+  }
+}
+
+function configureModes(meta) {
+  const choices = [];
+  if (backendReady) choices.push({id: "generator", label: "Generator"});
+  if (inspectReady) choices.push({id: "inspection", label: "Inspection lab"});
+  $("mode").replaceChildren(...choices.map(choice => {
+    const option = document.createElement("option");
+    option.value = choice.id; option.textContent = choice.label;
+    return option;
+  }));
+  $("mode-row").classList.toggle("hidden", choices.length < 2);
+  let selected = meta.default_mode;
+  if (!choices.some(choice => choice.id === selected)) {
+    selected = backendReady ? "generator" : inspectReady ? "inspection" : "generator";
+  }
+  $("mode").value = selected;
+  setMode(selected, {run: false});
+  return selected;
 }
 
 async function init() {
-  const data = await (await fetch("/api/registry")).json();
-  $("appname").textContent = data.name || "preview";
-  document.title = (data.name || "preview") + " preview";
-  $("ver").textContent = data.version ? "v" + data.version : "";
-  for (const c of data.controls) {
-    (c.tier === "primary" ? $("primary") : $("advanced")).appendChild(makeControl(c));
-    $("v_" + c.name).textContent = fmt(c.default, c);
+  try {
+    const res = await fetch("/api/registry");
+    const data = await readJsonResponse(res, "registry request failed");
+    backendReady = data.ready !== false;
+    inspectReady = data.inspect_ready === true;
+    backendStatus = (typeof data.status === "string" && data.status.trim())
+      ? data.status : "The selected generator is not ready.";
+    inspectionStatus = (typeof data.inspection_status === "string"
+      && data.inspection_status.trim())
+      ? data.inspection_status : "Inspection evidence is ready.";
+    inspectionBanner = (typeof data.inspection_banner === "string"
+      && data.inspection_banner.trim())
+      ? data.inspection_banner : "DEVELOPMENT INSPECTION / NOT GENERATOR OUTPUT";
+    $("inspection-banner-title").textContent = inspectionBanner;
+    $("inspection-status").textContent = inspectionStatus;
+    $("appname").textContent = data.name || "preview";
+    document.title = (data.name || "preview") + " preview";
+    $("ver").textContent = data.version ? "v" + data.version : "";
+    configureSizes(data);
+
+    for (const c of Array.isArray(data.controls) ? data.controls : []) {
+      (c.tier === "primary" ? $("primary") : $("advanced")).appendChild(makeControl(c));
+    }
+    configureInspectionControls(data);
+    inspectionCases = (Array.isArray(data.inspection_cases)
+      ? data.inspection_cases : []).map(entry => typeof entry === "string"
+        ? {id: entry, title: entry, description: ""} : entry)
+      .filter(entry => entry && typeof entry.id === "string" && entry.id);
+    if (inspectReady && !inspectionCases.length) {
+      inspectReady = false;
+      inspectionStatus = "Inspection metadata contains no registered evidence cases.";
+      $("inspection-status").textContent = inspectionStatus;
+    }
+    $("case").replaceChildren(...inspectionCases.map(entry => {
+      const option = document.createElement("option");
+      option.value = entry.id;
+      option.textContent = entry.title || entry.id;
+      option.title = entry.description || "";
+      return option;
+    }));
+    configureInspectionMembers();
+    refreshInspectionControlVisibility();
+
+    const selectedMode = configureModes(data);
+    setControlAvailability();
+    if (selectedMode === "generator") go();
+    else if (selectedMode === "inspection") loadInspection();
+    else $("status").textContent = backendStatus;
+  } catch (err) {
+    backendReady = false;
+    inspectReady = false;
+    setMode("unavailable", {run: false});
+    $("status").textContent = "error: " + err;
   }
-  $("gen").addEventListener("click", go);
-  $("dice").addEventListener("click", () => {
-    $("seed").value = Math.floor(Math.random() * 100000); go();
-  });
-  $("seed").addEventListener("change", go);
-  $("size").addEventListener("change", go);
-  $("vsel").addEventListener("change", () => paint(current, true));
-  go();
 }
+
+$("gen").addEventListener("click", go);
+$("dice").addEventListener("click", () => {
+  $("seed").value = Math.floor(Math.random() * 100000); go();
+});
+$("seed").addEventListener("change", go);
+$("size").addEventListener("change", go);
+$("vsel").addEventListener("change", () => paint(current, true));
+$("mode").addEventListener("change", () => setMode($("mode").value));
+$("inspect").addEventListener("click", () => loadInspection());
+$("case").addEventListener("change", () => {
+  configureInspectionMembers();
+  refreshInspectionControlVisibility();
+  const selected = selectedInspectionCaseMeta();
+  $("inspection-banner-title").textContent = selected
+    && typeof selected.display_label === "string" && selected.display_label.trim()
+    ? selected.display_label : inspectionBanner;
+  loadInspection();
+});
+$("member").addEventListener("change", () => loadInspection());
+$("member-prev").addEventListener("click", () => stepInspectionMember(-1));
+$("member-next").addEventListener("click", () => stepInspectionMember(1));
+$("member-random").addEventListener("click", randomInspectionMember);
+$("iview").addEventListener("change", () => {
+  updateInspectionViewMeta(); renderInspection(true);
+});
+$("irole").addEventListener("change", () => renderInspection(true));
+$("promotion-confirm").addEventListener("change", updatePromotionButton);
+$("promoter").addEventListener("input", updatePromotionButton);
+$("promotion-question").addEventListener("input", updatePromotionButton);
+$("promote").addEventListener("click", promoteInspectionBaseline);
+window.addEventListener("beforeunload", () => {
+  if (inspectionImageUrl) URL.revokeObjectURL(inspectionImageUrl);
+  for (const url of inspectionCompareUrls) URL.revokeObjectURL(url);
+});
 init();
 </script>
 </body>

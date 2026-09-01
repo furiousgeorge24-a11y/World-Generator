@@ -174,10 +174,34 @@ def map_report(s, ce, er, m, seed, controls, elapsed_s):
             "§9 mega-lake watch")
     ero_sum = float(er["ero"].sum())
     dep_sum = float(er["sed"].sum())
-    add("info" if dep_sum <= ero_sum * 1.001 else "warn",
-        "sediment_mass_balance",
-        round(dep_sum / max(ero_sum, 1e-9), 3),
-        "deposited/eroded volume; must not exceed 1 (one budget, §6e)")
+    cell_area_m2 = (e_km * 1000.0) ** 2
+    source_m3 = ero_sum * cell_area_m2
+    deposited_m3 = dep_sum * cell_area_m2
+    exported_m3 = float(er.get("sediment_export_m3", 0.0))
+    terminal_m3 = float(er.get("sediment_terminal_residual_m3", 0.0))
+    if source_m3 > 0.0:
+        dep_frac = deposited_m3 / source_m3
+        export_frac = exported_m3 / source_m3
+        terminal_frac = terminal_m3 / source_m3
+        closure = (deposited_m3 + exported_m3 + terminal_m3) / source_m3
+    else:
+        dep_frac = export_frac = terminal_frac = 0.0
+        closure = 1.0
+    add("info" if abs(closure - 1.0) <= 1e-9 else "warn",
+        "sediment_mass_balance", round(closure, 9),
+        "(deposited + boundary export + terminal residual) / actual "
+        "fluvial source; must close to 1")
+    add("info", "sediment_deposited_fraction", round(dep_frac, 3),
+        "fraction of actual fluvial source deposited inside the world")
+    add("info", "sediment_boundary_export_fraction",
+        round(export_frac, 3),
+        "fraction of actual fluvial source crossing the process-world "
+        "boundary")
+    add("info" if terminal_frac <= 1e-9 else "warn",
+        "sediment_terminal_residual_fraction", round(terminal_frac, 9),
+        "flux trapped at an interior self-receiver; zero is expected")
+    add("info", "sediment_boundary_export_km3",
+        round(exported_m3 / 1e9, 3))
     add("info", "max_sediment_m", round(float(er["sed"].max()), 0))
     riv_frac = float(((m["riv_log"] > np.log1p(200.0))
                       & ~m["water"]).mean())
@@ -199,6 +223,8 @@ def map_report(s, ce, er, m, seed, controls, elapsed_s):
         "eras": int(s.eras),
         "size": int(size),
         "elapsed_s": round(elapsed_s, 3),
+        "timings": {k: round(float(v), 6)
+                    for k, v in er.get("timings", {}).items()},
         "findings": findings,
     }
 

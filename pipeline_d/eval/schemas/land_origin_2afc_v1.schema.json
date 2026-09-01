@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mapgen:pipeline-c:eval:land-origin-2afc-verdict:v1",
+  "title": "Land-origin 2AFC verdict v1",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["trial", "void", "pick", "confidence", "evidence", "void_reason"],
+    "properties": {
+      "trial": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "void": {
+        "type": "boolean"
+      },
+      "pick": {
+        "type": ["string", "null"],
+        "enum": ["A", "B", null]
+      },
+      "confidence": {
+        "type": ["integer", "null"],
+        "minimum": 1,
+        "maximum": 5
+      },
+      "evidence": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["A", "B", "comparison"],
+            "properties": {
+              "A": {"type": "string", "minLength": 1, "pattern": "\\S"},
+              "B": {"type": "string", "minLength": 1, "pattern": "\\S"},
+              "comparison": {"type": "string", "minLength": 1, "pattern": "\\S"}
+            }
+          },
+          {"type": "null"}
+        ]
+      },
+      "void_reason": {
+        "type": ["string", "null"],
+        "minLength": 1,
+        "pattern": "\\S"
+      }
+    },
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "void": {"const": true}
+          }
+        },
+        "then": {
+          "properties": {
+            "pick": {"type": "null"},
+            "confidence": {"type": "null"},
+            "evidence": {"type": "null"},
+            "void_reason": {"type": "string", "minLength": 1, "pattern": "\\S"}
+          }
+        },
+        "else": {
+          "properties": {
+            "pick": {"enum": ["A", "B"]},
+            "confidence": {"type": "integer", "minimum": 1, "maximum": 5},
+            "evidence": {"$ref": "#/$defs/evidence"},
+            "void_reason": {"type": "null"}
+          }
+        }
+      }
+    ]
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A", "B", "comparison"],
+      "properties": {
+        "A": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "B": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "comparison": {"type": "string", "minLength": 1, "pattern": "\\S"}
+      }
+    }
+  }
+}

@@ -36,7 +36,8 @@ def meta():
 
 def generate_head(seed, controls, size):
     t0 = time.perf_counter()
-    cfg = make_config(controls or {})
+    effective = registry.effective_controls(controls)
+    cfg = make_config(effective)
     s = build_structure(int(seed), cfg)
     ce = coarse_elevation(s, cfg, int(seed))
     return {
@@ -44,13 +45,22 @@ def generate_head(seed, controls, size):
         "coarse": ce,
         "seed": int(seed),
         "size": int(size),
+        "controls": effective,
         "head_s": time.perf_counter() - t0,
     }
 
 
 def run_tail(head, controls):
     t0 = time.perf_counter()
-    cfg = make_config(controls or {})
+    merged = dict(head.get("controls", {}))
+    # A cached head already embodies every full-tier control. Applying a
+    # changed full value only to its provenance would make the echo lie;
+    # the cache owner must rebuild the head for those invalidations.
+    for name, value in (controls or {}).items():
+        if _INVALIDATION.get(name) in ("late", "render"):
+            merged[name] = value
+    effective = registry.effective_controls(merged)
+    cfg = make_config(effective)
     s = head["structure"]
     ce = head["coarse"]
     seed = head["seed"]
@@ -63,7 +73,7 @@ def run_tail(head, controls):
         "erosion": er,
         "map": m,
         "seed": seed,
-        "controls": dict(controls or {}),
+        "controls": effective,
         "size": size,
         "river_density": float(cfg.river_density),
         "elapsed_s": head["head_s"] + (time.perf_counter() - t0),
@@ -75,7 +85,13 @@ def generate(seed, controls, size):
 
 
 def set_render_controls(world, controls):
-    cfg = make_config(controls or {})
+    merged = dict(world.get("controls", {}))
+    for name, value in (controls or {}).items():
+        if _INVALIDATION.get(name) == "render":
+            merged[name] = value
+    effective = registry.effective_controls(merged)
+    cfg = make_config(effective)
+    world["controls"] = effective
     world["river_density"] = float(cfg.river_density)
 
 

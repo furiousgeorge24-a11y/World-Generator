@@ -2,12 +2,11 @@
 
 The promises. Everything here must be true of every delivered map.
 
-This document specifies **what the generator produces**, plus one
-standard governing how features may come to exist (§11). It contains no
-architecture, no algorithms, and no mechanism design — those are yours
-to invent. Where a requirement has a reason, the reason is stated in
-terms of what a viewer sees, because that is how results are judged
-here.
+This document specifies **what the generator produces**, plus causal
+constraints on how features may come to exist (§3b and §11). It
+prescribes no particular architecture or algorithm. Where a requirement
+has a reason, the reason is stated in terms of what a viewer sees,
+because that is how results are judged here.
 
 Real-world earth science is fair game and actively encouraged as a
 source of understanding. Other map generators in this repository are
@@ -34,43 +33,61 @@ not: see the quarantine note at the repo root.
 
 - Square lattice, generation-native. Rectangular maps allowed: each axis
   independently **128–2048** cells.
-- Edges are bounded. No wrapping — the map is a bounded region of a
-  world, not a torus.
+- The delivered raster is bounded and non-wrapping. Internal parent
+  domains may be periodic or otherwise boundary-neutral, but wrap
+  adjacency and repeated-tile semantics are never exposed as properties
+  of the delivered map.
 - **Physical units throughout.** Elevation in **metres, sea level = 0**.
   Horizontal scale is an author-set real distance per cell (km), so what
   a map *means* — a region, a continent, a world — is a knob rather than
   an ambiguity. Every requirement below that names a distance or a depth
   is in those real units and must hold at any resolution.
 - **Structural resolution independence.** The same seed and controls at
-  different resolutions must yield *the same world* — same landmasses,
-  same ranges, same coastline shape — with finer detail at higher
-  resolution. Fine texture may differ; large structure may not.
-  Preview-then-final is a supported workflow, not a hope.
+  different resolutions must yield *the same world*: major landmass
+  topology, range placement, and coastline structure remain stable
+  within a stated physical tolerance, with finer resolved detail at
+  higher resolution. Sub-grid crenellation, tiny islets, and other
+  explicitly fine features may converge rather than match cell for
+  cell; large structure may not reshuffle. Preview-then-final is a
+  supported workflow, not a hope.
 
 ## 3. The water border
 
-Two separate requirements. The first is absolute; the second is where
-the author has rejected work on sight.
+Two separate requirements. The first is an output invariant; the second
+governs how that invariant may be obtained.
 
 **3a. The outermost ring of cells is water on every delivered map.** No
-land touches the frame, at any control setting, on any seed. Every run
-reports the nearest-land-to-border distance as regression insurance.
+land touches the frame, at any control setting, on any seed. Water depth
+on that ring is unconstrained. The authoritative test is the final
+delivered-resolution water mask, not a wider dry-crust, continental-tag,
+or minimum-depth proxy. Every run reports the nearest-land-to-border
+distance as regression insurance.
 
-**3b. Land must not crowd, parallel, or mirror the frame.** The
-guarantee in 3a must fall out of *where land is allowed to form*, not
-from painting the edge blue at the end. Masking or redrawing a border
-after the fact produces the signature the author has explicitly
-rejected: coastlines that run straight alongside the frame for long
-stretches, and right-angle-ish corner features. On a reviewed batch the
-author found "land often contours the border of a map very closely,
-three of four map corners even have rather right angle-ish features …
-terribly unnatural."
+**3b. The border guarantee must be causal.** No terrain-forming law or
+corrective pass may use distance or direction to the delivered frame.
+In particular, no edge mask, forced-water ring, border fade, taper,
+clamp, or crop-coordinate relief change may be used to make §3a pass.
+A crop origin may be used to extract already-generated geography and to
+schedule a sufficiently haloed numerical solve; it may not change what
+terrain forms there. Selecting a water-bordered crop from a larger
+naturally generated world is allowed.
 
-Terrain near the border is not itself bad — excess is. The author
-accepted a bordering landmass that was "fairly small in size, doesn't
-mirror the map border precisely, and curves in and out of it fairly
-naturally." That is the bar: a coast near the frame must be as
-uncorrelated with the frame as a coast anywhere else.
+A coastline, isobath, range, or other feature that happens to parallel,
+crowd, or turn near the frame is **not a failure by appearance alone**.
+If its geometry was produced without reference to the delivered frame,
+it is natural evidence and remains valid. Frame-alignment measurements
+are therefore diagnostic tripwires for investigating causality, never
+hard acceptance gates. Long straight runs and corner-like turns still
+warrant investigation because past edge fixes produced that signature;
+rejection requires evidence that the frame or a numerical domain
+boundary influenced the terrain.
+
+Finite-world and localized-solver boundaries are part of this rule. If
+a finite rim or localized numerical boundary exists, independence must
+be closed by an applicable proof route: periodic or boundary-neutral
+construction, a sufficient causal-reach bound, or adequate nested and
+shifted-domain invariance. Otherwise §3b is failed or unresolved even
+when the literal water ring passes.
 
 ## 4. Determinism
 
@@ -88,10 +105,13 @@ uncorrelated with the frame as a coast anywhere else.
 
 ## 5. Robustness, reporting, provenance
 
-- **Generation never fails.** Every in-range control combination
-  produces a map. Internal findings — clamps, anomalies, failed
-  invariant checks — ship in the report *beside* the map. They never
-  destroy a run and never block delivery.
+- **Every run emits evidence.** Every in-range control combination
+  produces diagnostic artifacts and a report. Ordinary findings —
+  clamps, anomalies, and failed non-invariant checks — remain beside the
+  image rather than destroying the run. A failed hard invariant marks
+  the image **non-conforming** and blocks delivery or promotion as a
+  contract-satisfying map; the diagnostic artifact and report still
+  survive for inspection.
 - **Report per run**: seed, full control echo, timings, and findings
   (land fraction, elevation range, lake count, nearest-land-to-border,
   and whatever else is worth auditing).
@@ -149,6 +169,12 @@ muted drowned valleys on the shelf, and sparse canyons notching the
 slope (opposite major river mouths, ending in fans). Dendritic texture
 anywhere else underwater is a defect — worth an automatic check.
 
+**6h. Sediment is conserved.** Actual eroded source must close against
+in-world deposition plus explicit process-domain export plus any
+surfaced terminal residual. The terminal residual is expected to be
+zero; neither disappearing sediment nor an unreported numerical sink is
+acceptable.
+
 ## 7. Topography
 
 **7a. Mountain ranges are often coastal.** From the reference review:
@@ -166,9 +192,9 @@ hill country or by running offshore as island chains.
 
 **7c. A range has anatomy** — nested bands from outside in: foothill
 apron → flank → high core → crest, each band's edge irregular down to
-cell scale. Ranges are **asymmetric**: steeper on one side, with a broad
-apron on the other. Flanks read visibly dissected while crests stay
-cleaner.
+the finest resolved physical scale. Ranges are **asymmetric**: steeper
+on one side, with a broad apron on the other. Flanks read visibly
+dissected while crests stay cleaner.
 
 **7d. Summits occupy area.** High country should be broad clusters of
 near-peak terrain — a massif region, not a one-cell crest line with
@@ -190,10 +216,11 @@ Interiors should carry variety: isolated massifs standing alone in
 plains, stepped patchworks of distinct blocks, broad basins, worn
 shields.
 
-**7g. Lowlands are worked, not blank.** Fine mottling at cell scale
-everywhere; faint incised valley networks converging tree-wise
-downstream; lake chains along floodplains; and a distinct dissected
-hill-country register that sits *between* flat plains and mountains.
+**7g. Lowlands are worked, not blank.** Fine, locally modulated mottling
+at a fixed small world-space scale across appropriate lowlands; faint
+incised valley networks converging tree-wise downstream; lake chains
+along floodplains; and a distinct dissected hill-country register that
+sits *between* flat plains and mountains.
 
 **7h. Rivers should read at map scale.** Lowlands in the references are
 threaded with fine dark dendritic lines. Incision that only exists at
@@ -213,7 +240,11 @@ never a general condition of the map.
   large structural domains, with mountain systems running a long way
   unbroken.
 - **Water dominates.** Land occupies a minority of the map — roughly a
-  third is a good center, with author control over the balance.
+  third is a good center, with author control over the balance. Batch
+  evaluation of that control must demonstrate useful coverage in the
+  accepted low **15–25%**, medium **30–40%**, and high **45–<50%** land
+  bands. These are controller coverage targets, not a demand that every
+  individual seed hit every band.
 - **Highland/lowland balance is deliberately NOT fixed by the reference
   images.** How much of the land is mountainous versus flat stays an
   author knob. Do not over-fit the references on this axis; do over-fit
@@ -292,19 +323,23 @@ amplitude and character must be modulated by local conditions, so the
 texture *belongs* to the terrain carrying it. Uniform jitter sprinkled
 over a finished surface is decoration, and reads as decoration.
 
-**How you model those processes is deliberately open.** This principle
-constrains where features come from, not what machinery produces them.
-The only hard limit on that machinery is the performance budget (§15).
+**How you model those processes is deliberately open.** Subject to the
+preceding causal, determinism, robustness, and resolution constraints,
+this principle constrains where features come from rather than dictating
+the machinery. §15 sets the complexity budget.
 
 ### 11a. The naturalness bar (how work gets rejected)
 
 The visible symptom of a violated principle: **nothing may read as
-drawn, stamped, tiled, or placed for appearance.** Regularity is the
-tell. If a viewer can infer a spacing, a radius, a repeated stamp, or
-an alignment to the image frame, the feature is wrong no matter how
-pretty it is.
+drawn, stamped, tiled, or placed for appearance.** Regularity is a
+tripwire: inferred spacing, radii, repeated stamps, or image-frame
+alignment demand a causal audit. They are not proof by themselves. A
+regular or frame-aligned feature produced by the same frame-blind
+natural process that governs the rest of the world is valid; a feature
+produced or altered to satisfy the composition or border is not.
 
-Specific patterns that have been rejected on sight:
+Known rejection signatures that trigger an immediate hold and causal
+audit:
 - **Concentric rings** around islands. This is the canonical failure and
   gets referred to by name; it is the standard against which later work
   is checked.
@@ -312,7 +347,9 @@ Specific patterns that have been rejected on sight:
   a difference image, where the give-away was "the fairly even
   distribution and widths."
 - **Straight uniform troughs** (§9).
-- **Frame-correlated coastlines** (§3b).
+- **Frame-caused coastlines or bathymetry** (§3b), including edge fades,
+  masks, forced-water rings, and numerical-boundary leakage. Accidental
+  alignment of frame-blind natural terrain is not in this category.
 - **Floating islands** (§6e).
 
 The last of these is instructive about the standard: the objection was
@@ -320,9 +357,14 @@ not that the islands looked bad in isolation, but that the seafloor
 around them carried no trace of them existing. A feature whose
 surroundings are unaffected by it has not been produced by a process.
 
-## 12. Reference images (`examples/`)
+A deterministic, predeclared selector may choose among already-frozen
+natural geographies using final-water or composition criteria. Selection
+conditions which existing window is delivered; it does not produce,
+place, or alter a feature.
 
-`examples/ref1.png` – `ref14.png` are **author-blessed excellent
+## 12. Reference images (`../examples/`)
+
+`../examples/ref1.png` – `../examples/ref14.png` are **author-blessed excellent
 outputs** from a separate, external globe-generating program. They are
 positive references and may be studied freely and often.
 
@@ -368,18 +410,21 @@ do not reproduce them:
 ## 13. Controls
 
 - A control is **data**: name, type, range, default, tier, promise. The
-  preview UI is generated from that data — see `webui/README.md` at the
+  preview UI is generated from that data — see `../webui/README.md` at the
   repo root for the interface contract and the expected `hypsometric`
   base view.
-- **Aesthetic decisions become controls**, with a stated range and a
-  stated promise, rather than hard-coded constants.
+- **Author-variable optional process contributions become controls**,
+  with a stated range and promise rather than hard-coded constants.
+  Hard invariants, fundamental representations, and indispensable core
+  processes are not optional controls.
 - **A promise must hold across the entire stated range**, including at
   both ends.
 - **Promises are worded in process terms** — rates, physical
   magnitudes, what the thing *does* — rather than in terms of the
   appearance they are expected to produce (§11).
-- Every feature worth having is worth being able to turn **off**, so any
-  feature can be shown on/off against the same seed.
+- Every optional feature worth having is worth being able to turn
+  **off**, so its contribution can be shown on/off against the same
+  seed.
 
 ## 14. Review
 
@@ -387,8 +432,10 @@ do not reproduce them:
   and same-seed variant comparisons. A single hand-picked example is
   never evidence.
 - Contact sheets are first-class output, not a debugging convenience.
-- Any layer or field the generator computes should have a view that can
-  be rendered and looked at. Work that cannot be seen cannot be judged.
+- Every persisted or material field, and every stage output needed to
+  audit a contract promise, has a diagnostic view. Transient scratch
+  arrays are exempt. Work that matters but cannot be seen cannot be
+  judged.
 
 ## 15. Performance
 
