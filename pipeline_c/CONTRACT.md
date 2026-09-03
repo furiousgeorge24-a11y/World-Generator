@@ -62,8 +62,13 @@ Input is a seed, map geometry, `target_land_percent`,
 - The delivered raster is bounded and non-wrapping. An internal parent may
   be periodic or otherwise boundary-neutral, but wrapping is never a
   property of the delivered map.
-- Horizontal geometry is stated in physical world units. Resolution changes
-  sample the same world more finely rather than changing what the world is.
+- Horizontal geometry is stated in physical world units. Scale, in
+  kilometres per delivered pixel, is an author input with a fixed default.
+  Resolution and scale together size the delivered window, and the simulated
+  parent world is sized from that window, so a different resolution or scale
+  is a different world. Features keep their physical size and their on-screen
+  size at every resolution; a smaller map is a smaller piece of a smaller
+  world, never a coarser sampling of the same one.
 - The authoritative land mask is evaluated at the final delivered
   resolution after the module's minimal elevation and water solve. Structural
   tags, continental material, a coarse census, or a pre-water proxy cannot
@@ -77,13 +82,14 @@ Input is a seed, map geometry, `target_land_percent`,
 
   The denominator includes the required water border.
 
-The initial delivery target is a square `size × size` raster with default
-`size = 1024`, producing a default `1024 × 1024` map. Every material attempt
-predeclares its supported sizes, physical side length, and sampling convention.
-Internal geometry and stage schemas carry width and height independently so
-square delivery is not a hidden architectural assumption. Rectangular
-delivery is not yet claimed. Across supported resolutions, the same physical
-window is sampled rather than selecting a new one.
+The delivery target is a square `size × size` raster with default
+`size = 1024` at a default scale of `5 km/px`. Every material attempt
+predeclares its supported sizes, its scale range, the parent-to-window
+ratio, and its sampling convention. Internal geometry carries width and
+height independently so square delivery is not a hidden architectural
+assumption. Rectangular delivery is not yet claimed. Scale is world
+geometry, not a formation control: it is held fixed, like the seed, by
+every same-family sweep of the author controls, and it is never swept.
 
 ## 3. Land-amount control
 
@@ -149,7 +155,7 @@ For a fixed seed, physical delivered geometry, and implementation version:
   randomness;
 - exactly one delivered-window identity is selected for the entire control
   family, and its physical origin, extent, orientation, and parent identity
-  are reused at every target, fragmentation value, and supported resolution;
+  are reused at every target and fragmentation value;
 - a target or fragmentation change may not select a different window,
   replace the seed, or trigger hidden retries;
 - unrelated latent structure may not reshuffle merely because a control

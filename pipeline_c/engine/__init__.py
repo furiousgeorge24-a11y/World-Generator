@@ -1,7 +1,7 @@
-"""Public state for the Pipeline C land-origin laboratory."""
+"""Pipeline C engine: periodic parent world and its kinematic history."""
 
-VERSION = "0.3.0-c4-foundation"
+from __future__ import annotations
 
+VERSION = "0.4.0-c03-kinematic-history"
 
-class EngineUnavailableError(RuntimeError):
-    """Raised when generation is requested before an engine exists."""
+__all__ = ["VERSION"]

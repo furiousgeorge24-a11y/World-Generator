@@ -1,9 +1,9 @@
-# Local immutable C3 fixtures, C4/C5 snapshots, and author events.
-.review_store/
-
 # Python discovery/import caches are not review artifacts.
 __pycache__/
 **/__pycache__/
 
 # Generated audit batches: panels are regenerable from their seeds.
 audit_runs/
+
+# Build report, contact sheets, and anything else the run writes out.
+out/

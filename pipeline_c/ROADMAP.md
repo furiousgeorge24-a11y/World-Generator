@@ -6,13 +6,17 @@ built toward are in [`CONTRACT.md`](CONTRACT.md).
 
 ## Build order
 
-C4 (foundation) and C5 (tectonic fabric) exist. The rest do not. Each run
+C03 (foundation and kinematic history) exists. The rest do not. Each run
 owes a view for every layer, mask, and intermediate field it introduces, per
 [`VIEWS.md`](VIEWS.md).
 
 | Run | Responsibility | What it has to get right |
 |---|---|---|
-| C6 | Boundary geometry and kinematics — segmented, curving, finite-width corridors; relative motion or a justified equivalent | Coherent at world scale while curved and irregular locally, without becoming independent noisy squiggles |
+| C03 | Foundation and kinematic history — periodic domain, sampler, mantle drive, strength and damage, velocity solve, emergent plates and boundaries. No crust. | Boundaries that curve, segment, and change regime along their length, on a spread of seeds |
+| C04 | The seam formulation of [`DESIGN.md`](DESIGN.md) §3.6 behind a switch, production byte-identical: seam damage by slip work, tip propagation, nucleation, healing and merging. The corner search's dials and the existing views. | Whether cracks close loops and cut pieces, or craze or dead-end. Plate count and network share on the twelve development seeds |
+| C04.1 | A slipping seam stays weak: `work_damage` honoured under `seams`, so a seam damages by its slip rate and heals only when it stops | Whether seams persist, and whether the loops they close cut pieces |
+| C04.2 | The block model of [`DESIGN.md`](DESIGN.md) §3.6's last paragraph behind `seams = 2`: pieces are rigid bodies coupled through seam tractions, the stress the seam rules read is the sheet solve of the drag a piece failed to match, and seams are carried on markers that cannot duplicate | Whether the velocity view shows bodies, and whether a loop that closes encloses a plate rather than a crumb |
+| C6 | Crust on markers — creation, transport, thickening, subduction, arcs, rifting, hotspots, age | Coherent at world scale while curved and irregular locally, without becoming independent noisy squiggles |
 | C7 | Structural history and crustal state — material identity, age, deformation, margin classes, inherited structures | Believable large masses, asymmetric margins, subordinate fragments, broad quiet interiors |
 | C8 | Vertical structural response — uplift and subsidence causes, continuous structural elevation and depth | Relief that follows structure without tracing it |
 | C9 | First exposure — water reference, sea-relative height, the first authoritative land mask | Coastlines that read as flooded structure, not as thresholded noise |

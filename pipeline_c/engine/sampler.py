@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import struct
+from collections.abc import Sequence
 from dataclasses import dataclass
 
-from ._util import FoundationRecordError, require_hash, require_id, require_int
-from .constants import KEY_SCHEDULE_ID
+import numpy as np
+
+from ._util import EngineRecordError, require_hash, require_id, require_int
+
+
+KEY_SCHEDULE_ID = "pipeline-c-sha256-address-prf-v1"
 
 
 SIGNED_64_MIN = -(2**63)
@@ -20,7 +25,7 @@ def _text(value: str, label: str) -> bytes:
     require_id(value, label)
     encoded = value.encode("utf-8")
     if len(encoded) > UNSIGNED_32_MAX:
-        raise FoundationRecordError(f"{label} is too long for PRF encoding")
+        raise EngineRecordError(f"{label} is too long for PRF encoding")
     return struct.pack(">I", len(encoded)) + encoded
 
 
@@ -149,6 +154,56 @@ class StageSampler:
             x_m, y_m, channel=channel, index=index
         ) >> 11
         return first_53_bits / float(2**53)
+
+    def _prefix(self) -> bytes:
+        """The address-independent head of every `canonical_bytes` from here.
+
+        `SampleAddress.canonical_bytes` writes the key schedule and the four
+        identifiers first and the four integers last, so the head is constant
+        for one sampler. Hashing `prefix + pack(x, y, channel, index)` is the
+        same byte string the per-address path builds, and it is what makes a
+        whole-grid draw affordable.
+        """
+        return b"".join(
+            (
+                _text(KEY_SCHEDULE_ID, "key_schedule_id"),
+                _text(self.world_id, "world_id"),
+                _text(self.stage_id, "stage_id"),
+                _text(self.stage_version, "stage_version"),
+                _text(self.process_id, "process_id"),
+            )
+        )
+
+    def unit_float_lattice(self, xs_m: Sequence[int], ys_m: Sequence[int], *,
+                           channel: int = 0, index: int = 0) -> np.ndarray:
+        """`unit_float` over the outer product of two address axes.
+
+        Returns a `(len(ys_m), len(xs_m))` array whose entry `[j, i]` equals
+        `unit_float(xs_m[i], ys_m[j], channel=channel, index=index)` exactly.
+        Every address is validated the way `SampleAddress` validates it; the
+        only thing this skips is rebuilding the constant head of the address
+        encoding once per cell.
+        """
+        require_int(channel, "channel", minimum=0, maximum=UNSIGNED_32_MAX)
+        require_int(index, "index", minimum=0, maximum=UNSIGNED_64_MAX)
+        columns = [require_int(value, "x_m", minimum=SIGNED_64_MIN,
+                               maximum=SIGNED_64_MAX) for value in xs_m]
+        rows = [require_int(value, "y_m", minimum=SIGNED_64_MIN,
+                            maximum=SIGNED_64_MAX) for value in ys_m]
+        head = hashlib.sha256(self._prefix())
+        tail = struct.pack(">IQ", channel, index)
+        packed_columns = [struct.pack(">q", value) for value in columns]
+        out = np.empty((len(rows), len(columns)), dtype=np.float64)
+        scale = float(2**53)
+        for j, y_m in enumerate(rows):
+            packed_row = struct.pack(">q", y_m)
+            row_out = out[j]
+            for i, packed_column in enumerate(packed_columns):
+                digest = head.copy()
+                digest.update(packed_column + packed_row + tail)
+                row_out[i] = (int.from_bytes(digest.digest()[0:8], "big",
+                                             signed=False) >> 11) / scale
+        return out
 
     def probe_record(self, x_m: int, y_m: int, *, channel: int = 0,
                      index: int = 0) -> dict[str, object]:

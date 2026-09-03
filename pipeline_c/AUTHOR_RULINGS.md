@@ -74,10 +74,13 @@ flooding, tapering, masking, moats, or repair are.
 - `landmass_fragmentation` — range `0`–`1`, default **`0.5`**, no body-count
   promise.
 - Delivered maps are square via the existing `size` interface, default
-  **`1024 × 1024`**. Internal geometry carries width and height independently
-  so rectangles remain possible later.
-- Plate count is an **internal versioned setting**, not an advertised control,
-  and must never become a hidden synonym for fragmentation.
+  **`1024 × 1024`**, at an authorable scale of `5`–`20` km per pixel,
+  default **`5`**. Scale never changes with resolution; a lower resolution
+  is a smaller world, not smaller features. Internal geometry carries width
+  and height independently so rectangles remain possible later.
+- Plate count is emergent, not a setting. The internal versioned settings
+  are the drive field's wavelength and the lithosphere strength constants.
+  None of them may become a hidden synonym for fragmentation.
 - NumPy and Pillow are acceptable dependencies. A heavier scientific stack
   needs a specific mechanism to justify it.
 - Same-seed control variants reuse keyed latent randomness and one window; a

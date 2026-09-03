@@ -12,6 +12,12 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Root,
 
+    # The name the backend on this port reports from /api/registry. Only the
+    # legacy-listener confirmation below reads it; a caller that serves a
+    # different backend passes its own name through rather than being matched
+    # against another backend's.
+    [string]$RegistryName = "pipeline_c land-origin lab",
+
     [switch]$InspectOnly
 )
 
@@ -67,12 +73,15 @@ $portPattern = "(?i)(?:^|\s)--port(?:\s+|=)" +
 # Before this launcher used absolute arguments, run.bat used the exact relative
 # pair "..\webui\serve.py" and "--root .". A live legacy listener is accepted
 # only when its registry also proves it is this Pipeline C inspection backend.
+# Only the production backend ever ran with those relative arguments, so for
+# any other -RegistryName this confirmation simply never fires, which is the
+# strict answer rather than a weakened one.
 $legacyRegistryConfirmed = $false
 try {
     $registry = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/registry" -TimeoutSec 2
     $caseIds = @($registry.inspection_cases | ForEach-Object { $_.id })
     $legacyRegistryConfirmed =
-        $registry.name -eq "pipeline_c land-origin lab" -and
+        $registry.name -eq $RegistryName -and
         $registry.default_mode -eq "inspection" -and
         $caseIds -contains "c5-c02-development-cohort-v1"
 } catch {

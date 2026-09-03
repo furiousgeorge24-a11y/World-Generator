@@ -56,17 +56,28 @@ from eval.verdicts import PROMPT_LAYER_AUDIT, read_json  # noqa: E402
 DEFAULT_RUNS = ROOT / "audit_runs"
 PANEL_PX = 512
 
+# Epoch and tiled views are for the author, not for the blind audit: the audit
+# asks what kind of rule made a field, and the same field at four times is one
+# question, not four.
+DEFAULT_VIEWS = (
+    "plates", "boundaries", "regime", "strength", "strength_banded",
+    "velocity", "strain_rate", "strain_rate_banded", "drive",
+    "strength_initial",
+)
+
 # What the runner is willing to assert about a candidate view's mechanism.
 # `None` means genuinely arguable, and the panel is then excluded from
 # mechanism accuracy rather than scored against a guess. Only claim a value
 # that can be defended from the source of the stage that produced it.
 DECLARED_MECHANISM = {
-    # Literally the sum of two triangle waves along integer lattice directions.
-    "resistance": "periodic_waves",
-    # Accumulated directional step cost, produced by competitive growth.
-    # Defensible as either, so not asserted.
-    "arrival": None,
-    "affiliation": None,
+    # Smoothstep-interpolated periodic value noise from the sampler, or a
+    # first derivative of one. Nothing else here is defensible as a formula:
+    # the strength, velocity, strain, plate, and boundary fields are the
+    # residue of a hundred and fifty solve-damage-advect steps.
+    "drive": "filtered_noise",
+    "drive_phi": "filtered_noise",
+    "drive_psi": "filtered_noise",
+    "strength_initial": "filtered_noise",
 }
 
 
@@ -76,8 +87,21 @@ def _rgb(world, view: str) -> np.ndarray:
     return np.asarray(image.convert("RGB"))
 
 
-def _candidate_sources(seed: int, views: list[str]) -> tuple[list[Source], dict]:
-    world = webui_adapter.generate(seed)
+def _panel_px(sources: list[Source]) -> int:
+    """The largest panel every candidate can actually supply.
+
+    Views render at native history resolution, which is half the delivered
+    resolution, so a 512 px world has 256 px views and cannot be cropped to a
+    512 px panel. Candidates and calibration controls must share one panel
+    size or the judge could separate them by shape alone.
+    """
+    smallest = min(min(source.rgb.shape[:2]) for source in sources)
+    return min(PANEL_PX, smallest)
+
+
+def _candidate_sources(seed: int, views: list[str], pixels: int,
+                       scale: int) -> tuple[list[Source], dict]:
+    world = webui_adapter.generate(seed, {"scale_km": scale}, pixels)
     sources = [
         Source(view, _rgb(world, view), CANDIDATE, DECLARED_MECHANISM.get(view))
         for view in views
@@ -85,6 +109,8 @@ def _candidate_sources(seed: int, views: list[str]) -> tuple[list[Source], dict]
     return sources, {
         "world_seed": world.seed,
         "world_id": world.world_id,
+        "pixels": world.pixels,
+        "scale_km": world.scale_km,
         "stage": webui_adapter.meta()["stage"],
         "views": list(views),
     }
@@ -96,8 +122,10 @@ def command_build(args: argparse.Namespace) -> int:
     if unknown:
         raise SystemExit(f"unknown view(s): {unknown}")
 
-    sources, world_provenance = _candidate_sources(args.seed, views)
-    controls = build_controls(args.control_seed, PANEL_PX)
+    sources, world_provenance = _candidate_sources(
+        args.seed, views, args.pixels, args.scale)
+    panel_px = _panel_px(sources)
+    controls = build_controls(args.control_seed, panel_px)
     sources.extend(
         Source(control.control_id, control.rgb, control.kind, control.true_mechanism)
         for control in controls
@@ -109,7 +137,7 @@ def command_build(args: argparse.Namespace) -> int:
         sources,
         Path(args.runs) / run_id / "bundle",
         seed=args.batch_seed,
-        panel_px=PANEL_PX,
+        panel_px=panel_px,
         crop_factors=tuple(int(value) for value in args.crops.split(",")),
         duplicate_panels=args.duplicates,
         chunks=args.chunks,
@@ -117,7 +145,7 @@ def command_build(args: argparse.Namespace) -> int:
             "world": world_provenance,
             "control_seed": args.control_seed,
             "batch_seed": args.batch_seed,
-            "panel_px": PANEL_PX,
+            "panel_px": panel_px,
             "declared_mechanisms": {
                 view: DECLARED_MECHANISM.get(view) for view in views
             },
@@ -125,7 +153,7 @@ def command_build(args: argparse.Namespace) -> int:
     )
 
     print(f"run id        {run_id}")
-    print(f"panels        {summary['panel_count']} at {PANEL_PX}px")
+    print(f"panels        {summary['panel_count']} at {panel_px}px")
     print(f"judge packet  {summary['judge_packet']}")
     print(f"hidden key    {summary['hidden_key']}")
     print()
@@ -229,7 +257,10 @@ def command_verify(args: argparse.Namespace) -> int:
     rows = {row["panel"]: row for row in verdict}
     by_panel = {item["panel"]: item for item in key["panels"]}
 
-    world = webui_adapter.generate(provenance["world"]["world_seed"])
+    world = webui_adapter.generate(
+        provenance["world"]["world_seed"],
+        {"scale_km": provenance["world"]["scale_km"]},
+        provenance["world"]["pixels"])
     fields = {view: _rgb(world, view) for view in provenance["world"]["views"]}
     for control in build_controls(provenance["control_seed"], provenance["panel_px"]):
         fields[control.control_id] = control.rgb
@@ -276,7 +307,11 @@ def main(argv: list[str] | None = None) -> int:
 
     build = sub.add_parser("build", help="publish a blind audit batch")
     build.add_argument("--seed", type=int, required=True, help="world seed")
-    build.add_argument("--views", default=",".join(webui_adapter.VIEWS))
+    build.add_argument("--views", default=",".join(DEFAULT_VIEWS))
+    build.add_argument("--pixels", type=int, default=1024,
+                       help="delivered resolution of the audited world")
+    build.add_argument("--scale", type=int, default=5,
+                       help="kilometres per delivered pixel")
     build.add_argument("--crops", default="1,2",
                        help="integer magnifications, e.g. 1,2")
     build.add_argument("--duplicates", type=int, default=2)
